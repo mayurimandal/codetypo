@@ -1,7 +1,20 @@
-import { useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, ArrowRight } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { RefreshCw, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// Basic keywords for rudimentary highlighting across all languages
+const KEYWORDS = new Set([
+  "def", "import", "return", "if", "elif", "else", "while", "for", "in", "range", 
+  "const", "let", "var", "function", "async", "await", "try", "catch", "new", 
+  "class", "public", "private", "void", "String", "int", "float", "this", "#include",
+  "java", "static", "final", "System", "out", "print", "console", "log", "export",
+  "interface", "type", "true", "false", "null", "undefined", "continue", "break"
+]);
+
+const isWordChar = (char: string) => /[a-zA-Z0-9_]/.test(char);
 
 interface TypingInterfaceProps {
   code: string;
@@ -26,151 +39,214 @@ export default function TypingInterface({
   onReset,
   onNext,
 }: TypingInterfaceProps) {
-  const codeDisplayRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const codeDisplayRef = useRef<HTMLDivElement>(null);
+  const [showCursor, setShowCursor] = useState(true);
 
-  // Auto-scroll the code display as user types
+  // Cursor blinking effect
   useEffect(() => {
-    if (codeDisplayRef.current) {
-      const currentCharSpan = codeDisplayRef.current.querySelector(`[data-index="${userInput.length}"]`);
-      if (currentCharSpan) {
-        currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [userInput.length]);
+    const interval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Auto-focus textarea when component mounts
+  // Focus textarea when component mounts or resets
   useEffect(() => {
     if (textareaRef.current && !isComplete) {
       textareaRef.current.focus();
     }
-  }, [isComplete]);
+  }, [isComplete, code]);
 
-  const renderCode = () => {
-    return code.split('').map((char, index) => {
-      let className = 'transition-all duration-150'; // Default
-      
-      if (index < userInput.length) {
-        // Already typed - check if correct or incorrect
-        if (userInput[index] === char) {
-          className = 'text-green-400 bg-green-500/10'; // Correct
-        } else {
-          className = 'text-red-400 bg-red-500/30 font-bold'; // Incorrect
+  // Determine current line index for scrolling
+  const currentLineIndex = userInput.split('\n').length - 1;
+
+  // Auto-scroll logic for code display to keep current line visible
+  useEffect(() => {
+    if (codeDisplayRef.current) {
+      const lines = codeDisplayRef.current.children;
+      if (currentLineIndex >= 0 && currentLineIndex < lines.length) {
+        const targetLine = lines[currentLineIndex] as HTMLElement;
+        const container = codeDisplayRef.current;
+        
+        const containerHeight = container.offsetHeight;
+        const lineOffset = containerHeight / 3;
+
+        if (targetLine.offsetTop > container.scrollTop + containerHeight - lineOffset) {
+             container.scrollTop = targetLine.offsetTop - containerHeight + lineOffset;
+        } 
+        else if (targetLine.offsetTop < container.scrollTop + lineOffset) {
+             container.scrollTop = targetLine.offsetTop - lineOffset;
         }
-      } else if (index === userInput.length) {
-        className = 'text-white bg-neon-cyan/30 animate-pulse'; // Current cursor position
-      } else {
-        className = 'text-gray-500'; // Not yet typed
+      }
+    }
+  }, [userInput, currentLineIndex]);
+
+
+  // Render code with syntax highlighting
+  const renderCodeWithHighlight = () => {
+    const lines = code.split('\n');
+    let globalIndex = 0;
+    let inString = false;
+    
+    return lines.map((line, lineIndex) => {
+      let renderedLine = '';
+      let isLineComment = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        let syntaxClassName = '';
+        
+        // FIX: Moved variable declarations to the top of the loop's scope
+        let word = '';
+        let endOfWord = i;
+        
+        const remainingLine = line.substring(i);
+        
+        if (remainingLine.startsWith('//') || remainingLine.startsWith('#')) {
+            isLineComment = true;
+        }
+
+        if (isLineComment) {
+            syntaxClassName = 'syntax-comment';
+            inString = false;
+        } 
+        
+        else if (char === '"' || char === "'") { 
+            if (i === 0 || line[i - 1] !== '\\') {
+                inString = !inString;
+            }
+            syntaxClassName = 'syntax-string';
+        } else if (inString) {
+            syntaxClassName = 'syntax-string';
+        }
+        
+        else if (isWordChar(char)) {
+            while (endOfWord < line.length && isWordChar(line[endOfWord])) {
+                word += line[endOfWord];
+                endOfWord++;
+            }
+            
+            if ((i === 0 || !isWordChar(line[i - 1])) && word.length > 0) {
+                if (KEYWORDS.has(word)) {
+                    syntaxClassName = 'syntax-keyword';
+                } else if (!isNaN(Number(word))) { 
+                    syntaxClassName = 'syntax-number';
+                } else {
+                    let nextCharIndex = endOfWord;
+                    while (nextCharIndex < line.length && line[nextCharIndex] === ' ') {
+                        nextCharIndex++;
+                    }
+                    if (line[nextCharIndex] === '(') { 
+                        syntaxClassName = 'syntax-function';
+                    }
+                }
+            }
+        }
+
+        let finalClassName = '';
+
+        if (globalIndex < userInput.length) {
+          const userChar = userInput[globalIndex];
+          finalClassName = userChar === char ? 'text-green-400 bg-green-400/20' : 'text-red-400 bg-red-400/20';
+        } else if (globalIndex === userInput.length && isActive && !isComplete) {
+          finalClassName = cn(`bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`);
+        } else {
+          finalClassName = syntaxClassName || 'text-gray-400';
+        }
+        
+        renderedLine += `<span class="${finalClassName}">${char === ' ' ? '&nbsp;' : char}</span>`;
+        
+        if (syntaxClassName && (syntaxClassName === 'syntax-keyword' || syntaxClassName === 'syntax-number' || syntaxClassName === 'syntax-function')) {
+            const wordLength = word.length;
+            if (wordLength > 1 && i === endOfWord - wordLength) {
+                i += wordLength - 1;
+                globalIndex += wordLength - 1;
+                
+                syntaxClassName = '';
+                word = '';
+            } else {
+                globalIndex++;
+            }
+        } else {
+            globalIndex++;
+        }
       }
       
       return (
-        <span key={index} data-index={index} className={className}>
-          {char === '\n' ? '⏎\n' : char === ' ' ? '\u00A0' : char}
-        </span>
+        <div key={lineIndex} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: renderedLine }} />
       );
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Combined Typing Interface */}
-      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-neon-cyan">
+      {/* Code Display */}
+      <Card className="code-highlight border border-dark-accent">
         <CardContent className="p-6">
-          {/* Code Display with scrolling */}
-          <div className="mb-4">
-            <div className="text-sm mb-2 text-gray-400 font-mono flex justify-between items-center">
-              <span>Type the code below:</span>
-              <span className="text-xs">
-                {userInput.length} / {code.length} characters
-              </span>
-            </div>
-            <div 
-              ref={codeDisplayRef}
-              className="bg-gray-900/50 border-2 border-gray-700 rounded-lg p-4 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-neon-cyan scrollbar-track-gray-800"
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-gray-400">Type this code:</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onNext}
+              className="text-sm neon-cyan hover:text-neon-pink transition-colors"
             >
-              <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
-                {renderCode()}
-              </pre>
-            </div>
-          </div>
-
-          {/* Hidden Input Area - for actual typing */}
-          <div>
-            <div className="text-sm mb-2 text-gray-400 font-mono">
-              Your typing area:
-            </div>
-            <textarea
-              ref={textareaRef}
-              value={userInput}
-              onChange={(e) => onInputChange(e.target.value)}
-              disabled={isComplete}
-              className="w-full h-[120px] bg-gray-900 text-gray-100 border-2 border-gray-700 rounded-lg p-4 font-mono text-base leading-relaxed resize-none focus:outline-none focus:border-neon-cyan focus:ring-2 focus:ring-neon-cyan/50 disabled:opacity-50 placeholder-gray-500"
-              placeholder={isComplete ? "Test completed!" : "Start typing here..."}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
-              autoComplete="off"
-              style={{ caretColor: '#2dd4bf' }}
-            />
+              Next Snippet <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
           </div>
           
-          {/* Stats Bar */}
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
-            <div className="flex space-x-6">
-              <span className="text-gray-400">
-                Progress: <span className="text-neon-cyan font-semibold">{Math.round((userInput.length / code.length) * 100)}%</span>
-              </span>
-              <span className="text-gray-400">
-                Errors: <span className="text-red-400 font-semibold">{errors}</span>
-              </span>
-              <span className="text-gray-400">
-                Accuracy: <span className="text-green-400 font-semibold">{accuracy}%</span>
-              </span>
-            </div>
+          <div ref={codeDisplayRef} className="font-mono text-lg max-h-64 overflow-y-auto">
+            {renderCodeWithHighlight()}
           </div>
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center space-x-4">
-        <Button
-          onClick={onReset}
-          variant="outline"
-          className="border-dark-accent text-gray-300 hover:bg-neon-pink hover:text-dark-primary transition-all"
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Reset
-        </Button>
-        
-        <Button
-          onClick={onNext}
-          className="gradient-bg hover:scale-105 transition-transform shadow-lg"
-        >
-          Next Snippet
-          <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
-
-      {/* Instructions */}
-      {!isActive && !isComplete && (
-        <Card className="bg-blue-500/10 border-neon-blue">
-          <CardContent className="p-4 text-center">
-            <p className="text-sm text-blue-300">
-              💡 <strong>Tip:</strong> The code display will scroll automatically as you type. Focus on the typing area below and match the code exactly!
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {isComplete && (
-        <Card className="bg-green-500/10 border-green-500">
-          <CardContent className="p-4 text-center">
-            <p className="text-sm text-green-300">
-              🎉 <strong>Great job!</strong> You've completed this challenge. Check your results and try the next one!
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Typing Input */}
+      <Card className="bg-dark-secondary/50 backdrop-blur-sm border border-dark-accent">
+        <CardContent className="p-6">
+          <div className="mb-2">
+            <label className="block text-sm text-gray-400 mb-2">Your Code:</label>
+          </div>
+          
+          <div className="relative">
+            <Textarea
+              ref={textareaRef}
+              value={userInput}
+              onChange={(e) => onInputChange(e.target.value)}
+              className="w-full h-20 bg-dark-primary border border-dark-accent rounded-lg p-4 font-mono text-lg focus:outline-none focus:border-neon-cyan resize-none"
+              placeholder={isComplete ? "Test completed!" : "Start typing the code above..."}
+              disabled={isComplete}
+              spellCheck={false}
+            />
+          </div>
+          
+          {/* Live Stats */}
+          <div className="flex justify-between items-center mt-4 text-sm">
+            <div className="flex space-x-6">
+              <span className="text-gray-400">
+                Characters: <span className="text-white">{userInput.length}/{code.length}</span>
+              </span>
+              <span className="text-gray-400">
+                Accuracy: <span className="text-green-400">{accuracy.toFixed(1)}%</span>
+              </span>
+              <span className="text-gray-400">
+                Errors: <span className="text-red-400">{errors}</span>
+              </span>
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReset}
+              className="border-neon-pink text-neon-pink hover:bg-neon-pink hover:text-white"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -47,6 +47,31 @@ export default function TypingInterface({
     }
   }, [isComplete, isActive, code]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault(); // Prevent default focus change
+
+      const { selectionStart, selectionEnd, value } = e.currentTarget;
+      const tabSpaces = '  '; // Using 2 spaces for a tab
+
+      // Insert the spaces at the current cursor position
+      const newValue = value.substring(0, selectionStart) + tabSpaces + value.substring(selectionEnd);
+      
+      onInputChange(newValue);
+      
+      // After the state updates, React moves the cursor to the end.
+      // We need to manually set it back to the correct position after the inserted spaces.
+      // A minimal timeout ensures this runs *after* React has re-rendered the component.
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const newCursorPosition = selectionStart + tabSpaces.length;
+          textareaRef.current.selectionStart = newCursorPosition;
+          textareaRef.current.selectionEnd = newCursorPosition;
+        }
+      }, 0);
+    }
+  };
+
   const renderCode = () => {
     return code.split('').map((char, index) => {
       let className = 'text-yellow-400'; // Untyped text is yellow
@@ -68,7 +93,7 @@ export default function TypingInterface({
       }
       
       return (
-        <span key={index} className={className}>
+        <span key={index} data-index={index} className={className}>
           {char === '\n' ? '⏎\n' : char}
         </span>
       );
@@ -99,6 +124,7 @@ export default function TypingInterface({
               ref={textareaRef}
               value={userInput}
               onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={handleKeyDown} // <-- Add the key down handler here
               disabled={isComplete}
               className="w-full h-[120px] bg-gray-900 text-gray-100 border-2 border-gray-700 rounded-lg p-4 font-mono text-base leading-relaxed resize-none focus:outline-none focus:border-neon-cyan focus:ring-2 focus:ring-neon-cyan/50 disabled:opacity-50"
               placeholder={isComplete ? "Test completed!" : "Start typing here..."}

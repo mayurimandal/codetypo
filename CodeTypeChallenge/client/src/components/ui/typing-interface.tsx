@@ -33,12 +33,12 @@ export default function TypingInterface({
   // Auto-scroll the code display as user types
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const currentCharSpan = codeDisplayRef.current.querySelector('.cursor');
+      const currentCharSpan = codeDisplayRef.current.querySelector(`[data-index="${userInput.length}"]`);
       if (currentCharSpan) {
         currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [userInput]);
+  }, [userInput.length]);
 
   // Auto-focus textarea when component mounts
   useEffect(() => {
@@ -49,23 +49,26 @@ export default function TypingInterface({
 
   const renderCode = () => {
     return code.split('').map((char, index) => {
-      let className = 'text-gray-500'; // Not yet typed
+      let className = 'transition-all duration-150'; // Default
       
       if (index < userInput.length) {
         // Already typed - check if correct or incorrect
         if (userInput[index] === char) {
-          className = 'text-green-400'; // Correct
+          className = 'text-green-400 bg-green-500/10'; // Correct
         } else {
-          className = 'text-red-400 bg-red-500/20'; // Incorrect
+          className = 'text-red-400 bg-red-500/30 font-bold'; // Incorrect
         }
-      } else if (index === userInput.length && isActive) {
-        // Current cursor position
-        className = 'text-white bg-neon-cyan/50 rounded animate-pulse cursor'; 
+      } else if (index === userInput.length) {
+        // FIX: Cursor is now white fill with black text
+        className = 'text-black bg-white rounded animate-pulse'; // Current cursor position
+      } else {
+        // FIX: Untyped text is now yellow
+        className = 'text-yellow-400';
       }
       
       return (
         <span key={index} data-index={index} className={className}>
-          {char}
+          {char === '\n' ? '⏎\n' : char}
         </span>
       );
     });
@@ -73,12 +76,13 @@ export default function TypingInterface({
 
   return (
     <div className="space-y-6">
-      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
+      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-neon-cyan">
         <CardContent className="p-6">
           <div className="mb-4">
             <div 
               ref={codeDisplayRef}
               className="bg-gray-900/50 border-2 border-gray-700 rounded-lg p-4 max-h-[300px] overflow-y-auto"
+              onClick={() => textareaRef.current?.focus()}
             >
               <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
                 {renderCode()}
@@ -107,6 +111,9 @@ export default function TypingInterface({
           
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">
+              <span className="text-gray-400">
+                Progress: <span className="text-neon-cyan font-semibold">{Math.round((userInput.length / (code.length || 1)) * 100)}%</span>
+              </span>
               <span className="text-gray-400">
                 Errors: <span className="text-red-400 font-semibold">{errors}</span>
               </span>

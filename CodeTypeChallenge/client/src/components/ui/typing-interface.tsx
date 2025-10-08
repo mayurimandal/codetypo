@@ -1,8 +1,20 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RefreshCw, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils"; // <-- NEW IMPORT
+
+// Basic keywords for rudimentary highlighting across all languages
+const KEYWORDS = new Set([
+  "def", "import", "return", "if", "elif", "else", "while", "for", "in", "range", 
+  "const", "let", "var", "function", "async", "await", "try", "catch", "new", 
+  "class", "public", "private", "void", "String", "int", "float", "this", "#include",
+  "java", "static", "final", "System", "out", "print", "console", "log", "export",
+  "interface", "type", "true", "false", "null", "undefined", "continue", "break"
+]);
+
+const isWordChar = (char: string) => /[a-zA-Z0-9_]/.test(char);
 
 interface TypingInterfaceProps {
   code: string;
@@ -48,36 +60,88 @@ export default function TypingInterface({
   // Render code with syntax highlighting
   const renderCodeWithHighlight = () => {
     const lines = code.split('\n');
+    let globalIndex = 0; // Track the absolute character index in the code
+    let inString = false;
     
     return lines.map((line, lineIndex) => {
-      const lineStartIndex = lines.slice(0, lineIndex).reduce((acc, l) => acc + l.length + 1, 0);
-      const lineEndIndex = lineStartIndex + line.length;
-      
       let renderedLine = '';
-      
+      let isLineComment = false;
+
       for (let i = 0; i < line.length; i++) {
-        const globalIndex = lineStartIndex + i;
         const char = line[i];
-        const userChar = userInput[globalIndex];
         
-        let className = '';
+        let syntaxClassName = '';
         
-        if (globalIndex < userInput.length) {
-          // Character has been typed
-          if (userChar === char) {
-            className = 'text-green-400 bg-green-400/20';
-          } else {
-            className = 'text-red-400 bg-red-400/20';
-          }
-        } else if (globalIndex === userInput.length && isActive) {
-          // Current cursor position
-          className = `bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`;
-        } else {
-          // Not yet typed
-          className = 'text-gray-400';
+        // 1. Determine Syntax Status 
+        const remainingLine = line.substring(i);
+        
+        // Check for line comments (Python #, JS/C++ //)
+        if (remainingLine.startsWith('//') || remainingLine.startsWith('#')) {
+            isLineComment = true;
+        }
+
+        if (isLineComment) {
+            syntaxClassName = 'syntax-comment';
+            inString = false;
+        } 
+        
+        // String Detection (simple toggle - will break on multiline/escaped quotes)
+        else if (char === '\"' || char === \"'\") {
+            // Check if it's an escaped quote
+            if (i === 0 || line[i - 1] !== '\\\\') {
+                inString = !inString;
+            }
+            syntaxClassName = 'syntax-string';
+        } else if (inString) {
+            syntaxClassName = 'syntax-string';
         }
         
-        renderedLine += `<span class="${className}">${char === ' ' ? '&nbsp;' : char}</span>`;
+        // Keyword, Function, Number Detection (only if not in comment or string)
+        else if (isWordChar(char)) {
+            let word = '';
+            let endOfWord = i;
+            
+            // Extract the full word from the current position
+            while (endOfWord < line.length && isWordChar(line[endOfWord])) {
+                word += line[endOfWord];
+                endOfWord++;
+            }
+            
+            // Check if the current character is the start of a classified token
+            if ((i === 0 || !isWordChar(line[i - 1])) && word.length > 0) {
+                if (KEYWORDS.has(word)) {
+                    syntaxClassName = 'syntax-keyword';
+                } else if (!isNaN(Number(word))) { 
+                    syntaxClassName = 'syntax-number';
+                } else {
+                    let nextCharIndex = endOfWord;
+                    while (nextCharIndex < line.length && line[nextCharIndex] === ' ') {
+                        nextCharIndex++;
+                    }
+                    if (line[nextCharIndex] === '(') { 
+                        syntaxClassName = 'syntax-function';
+                    }
+                }
+            }
+        }
+
+        // 2. Determine Typing Status (Highest Priority)
+        let finalClassName = '';
+
+        if (globalIndex < userInput.length) {
+          // Typed characters: Green/Red takes absolute priority
+          const userChar = userInput[globalIndex];
+          finalClassName = userChar === char ? 'text-green-400 bg-green-400/20' : 'text-red-400 bg-red-400/20';
+        } else if (globalIndex === userInput.length && isActive) {
+          // Cursor position
+          finalClassName = cn(`bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`);
+        } else {
+          // Untyped text: Apply syntax highlighting or default gray
+          finalClassName = syntaxClassName || 'text-gray-400';
+        }
+        
+        renderedLine += `<span class="${finalClassName}">${char === ' ' ? '&nbsp;' : char}</span>`;
+        globalIndex++;
       }
       
       return (

@@ -33,41 +33,42 @@ export default function TypingInterface({
   // Auto-scroll the code display as user types
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const currentCharSpan = codeDisplayRef.current.querySelector(`[data-index="${userInput.length}"]`);
-      if (currentCharSpan) {
-        currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const cursor = codeDisplayRef.current.querySelector('.cursor');
+      if (cursor) {
+        cursor.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [userInput.length]);
+  }, [userInput]);
 
-  // Auto-focus textarea when component mounts
+  // Auto-focus the textarea
   useEffect(() => {
-    if (textareaRef.current && !isComplete) {
-      textareaRef.current.focus();
+    if (!isComplete) {
+      textareaRef.current?.focus();
     }
-  }, [isComplete]);
+  }, [isComplete, isActive, code]);
 
   const renderCode = () => {
     return code.split('').map((char, index) => {
-      let className = 'transition-all duration-150'; // Default
+      let className = 'text-yellow-400'; // Untyped text is yellow
       
       if (index < userInput.length) {
-        // Already typed - check if correct or incorrect
-        if (userInput[index] === char) {
-          className = 'text-green-400 bg-green-500/10'; // Correct
-        } else {
-          className = 'text-red-400 bg-red-500/30 font-bold'; // Incorrect
-        }
-      } else if (index === userInput.length) {
-        // FIX: Cursor is now white fill with black text
-        className = 'text-black bg-white rounded animate-pulse'; // Current cursor position
-      } else {
-        // FIX: Untyped text is now yellow
-        className = 'text-yellow-400';
+        // Already typed characters
+        className = userInput[index] === char ? 'text-green-400' : 'text-red-400 bg-red-500/20';
+      }
+      
+      // Add a cursor span at the current typing position
+      if (index === userInput.length && isActive) {
+        return (
+          <span key="cursor" className="relative cursor">
+            <span className='text-black bg-white rounded animate-pulse'>
+              {char === '\n' ? '⏎' : char}
+            </span>
+          </span>
+        );
       }
       
       return (
-        <span key={index} data-index={index} className={className}>
+        <span key={index} className={className}>
           {char === '\n' ? '⏎\n' : char}
         </span>
       );
@@ -76,7 +77,7 @@ export default function TypingInterface({
 
   return (
     <div className="space-y-6">
-      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-neon-cyan">
+      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
         <CardContent className="p-6">
           <div className="mb-4">
             <div 

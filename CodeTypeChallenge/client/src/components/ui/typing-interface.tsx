@@ -1,20 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { RotateCcw, ArrowRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-// Basic keywords for rudimentary highlighting across all languages
-const KEYWORDS = new Set([
-  "def", "import", "return", "if", "elif", "else", "while", "for", "in", "range", 
-  "const", "let", "var", "function", "async", "await", "try", "catch", "new", 
-  "class", "public", "private", "void", "String", "int", "float", "this", "#include",
-  "java", "static", "final", "System", "out", "print", "console", "log", "export",
-  "interface", "type", "true", "false", "null", "undefined", "continue", "break"
-]);
-
-const isWordChar = (char: string) => /[a-zA-Z0-9_]/.test(char);
 
 interface TypingInterfaceProps {
   code: string;
@@ -39,211 +27,123 @@ export default function TypingInterface({
   onReset,
   onNext,
 }: TypingInterfaceProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const codeDisplayRef = useRef<HTMLDivElement>(null);
-  const [showCursor, setShowCursor] = useState(true);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Cursor blinking effect
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setShowCursor(prev => !prev);
-    }, 500);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Focus textarea when component mounts or resets
-  useEffect(() => {
-    if (textareaRef.current && !isComplete) {
-      textareaRef.current.focus();
-    }
-  }, [isComplete, code]);
-
-  // Determine current line index for scrolling
-  const currentLineIndex = userInput.split('\n').length - 1;
-
-  // Auto-scroll logic for code display to keep current line visible
+  // Auto-scroll the code display as user types
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const lines = codeDisplayRef.current.children;
-      if (currentLineIndex >= 0 && currentLineIndex < lines.length) {
-        const targetLine = lines[currentLineIndex] as HTMLElement;
-        const container = codeDisplayRef.current;
-        
-        const containerHeight = container.offsetHeight;
-        const lineOffset = containerHeight / 3;
-
-        if (targetLine.offsetTop > container.scrollTop + containerHeight - lineOffset) {
-             container.scrollTop = targetLine.offsetTop - containerHeight + lineOffset;
-        } 
-        else if (targetLine.offsetTop < container.scrollTop + lineOffset) {
-             container.scrollTop = targetLine.offsetTop - lineOffset;
-        }
+      const activeLine = codeDisplayRef.current.querySelector('.active-line');
+      if (activeLine) {
+        activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [userInput, currentLineIndex]);
+  }, [userInput]);
 
+  // Auto-focus textarea when component mounts or activity changes
+  useEffect(() => {
+    if (isActive && !isComplete) {
+      textareaRef.current?.focus();
+    }
+  }, [isActive, isComplete]);
 
-  // Render code with syntax highlighting
-  const renderCodeWithHighlight = () => {
-    const lines = code.split('\n');
-    let globalIndex = 0;
-    let inString = false;
-    
-    return lines.map((line, lineIndex) => {
-      let renderedLine = '';
-      let isLineComment = false;
+  const renderCode = () => {
+    const userInputLines = userInput.split('\n');
+    const codeLines = code.split('\n');
+    const currentLineIndex = userInputLines.length - 1;
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        let syntaxClassName = '';
-        
-        // FIX: Moved variable declarations to the top of the loop's scope
-        let word = '';
-        let endOfWord = i;
-        
-        const remainingLine = line.substring(i);
-        
-        if (remainingLine.startsWith('//') || remainingLine.startsWith('#')) {
-            isLineComment = true;
-        }
+    return codeLines.map((line, lineIndex) => {
+      const isCurrentLine = lineIndex === currentLineIndex;
+      let lineContent;
 
-        if (isLineComment) {
-            syntaxClassName = 'syntax-comment';
-            inString = false;
-        } 
-        
-        else if (char === '"' || char === "'") { 
-            if (i === 0 || line[i - 1] !== '\\') {
-                inString = !inString;
-            }
-            syntaxClassName = 'syntax-string';
-        } else if (inString) {
-            syntaxClassName = 'syntax-string';
-        }
-        
-        else if (isWordChar(char)) {
-            while (endOfWord < line.length && isWordChar(line[endOfWord])) {
-                word += line[endOfWord];
-                endOfWord++;
-            }
-            
-            if ((i === 0 || !isWordChar(line[i - 1])) && word.length > 0) {
-                if (KEYWORDS.has(word)) {
-                    syntaxClassName = 'syntax-keyword';
-                } else if (!isNaN(Number(word))) { 
-                    syntaxClassName = 'syntax-number';
-                } else {
-                    let nextCharIndex = endOfWord;
-                    while (nextCharIndex < line.length && line[nextCharIndex] === ' ') {
-                        nextCharIndex++;
-                    }
-                    if (line[nextCharIndex] === '(') { 
-                        syntaxClassName = 'syntax-function';
-                    }
-                }
-            }
-        }
-
-        let finalClassName = '';
-
-        if (globalIndex < userInput.length) {
-          const userChar = userInput[globalIndex];
-          finalClassName = userChar === char ? 'text-green-400 bg-green-400/20' : 'text-red-400 bg-red-400/20';
-        } else if (globalIndex === userInput.length && isActive && !isComplete) {
-          finalClassName = cn(`bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`);
-        } else {
-          finalClassName = syntaxClassName || 'text-gray-400';
-        }
-        
-        renderedLine += `<span class="${finalClassName}">${char === ' ' ? '&nbsp;' : char}</span>`;
-        
-        if (syntaxClassName && (syntaxClassName === 'syntax-keyword' || syntaxClassName === 'syntax-number' || syntaxClassName === 'syntax-function')) {
-            const wordLength = word.length;
-            if (wordLength > 1 && i === endOfWord - wordLength) {
-                i += wordLength - 1;
-                globalIndex += wordLength - 1;
-                
-                syntaxClassName = '';
-                word = '';
-            } else {
-                globalIndex++;
-            }
-        } else {
-            globalIndex++;
-        }
+      if (lineIndex < currentLineIndex) {
+        // Line has been fully typed
+        lineContent = <span className="text-green-400">{line}</span>;
+      } else if (isCurrentLine) {
+        // This is the active typing line
+        const typedPart = userInputLines[currentLineIndex];
+        const untypedPart = line.substring(typedPart.length);
+        lineContent = (
+          <>
+            {typedPart.split('').map((char, charIndex) => {
+              const isCorrect = char === line[charIndex];
+              return (
+                <span key={charIndex} className={isCorrect ? 'text-green-400' : 'text-red-400 bg-red-500/30'}>
+                  {line[charIndex] === ' ' ? '\u00A0' : line[charIndex]}
+                </span>
+              );
+            })}
+            <span className="bg-neon-cyan/50 animate-pulse">{untypedPart.charAt(0) || '\u00A0'}</span>
+            <span className="text-gray-500">{untypedPart.substring(1)}</span>
+          </>
+        );
+      } else {
+        // Future lines
+        lineContent = <span className="text-gray-500">{line}</span>;
       }
-      
+
       return (
-        <div key={lineIndex} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: renderedLine }} />
+        <div key={lineIndex} className={isCurrentLine ? 'active-line' : ''}>
+          {lineContent}
+          {lineIndex < codeLines.length - 1 && '⏎\n'}
+        </div>
       );
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Code Display */}
-      <Card className="code-highlight border border-dark-accent">
+      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm text-gray-400">Type this code:</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onNext}
-              className="text-sm neon-cyan hover:text-neon-pink transition-colors"
-            >
-              Next Snippet <ArrowRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div ref={codeDisplayRef} className="font-mono text-lg max-h-64 overflow-y-auto">
-            {renderCodeWithHighlight()}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Typing Input */}
-      <Card className="bg-dark-secondary/50 backdrop-blur-sm border border-dark-accent">
-        <CardContent className="p-6">
-          <div className="mb-2">
-            <label className="block text-sm text-gray-400 mb-2">Your Code:</label>
-          </div>
-          
-          <div className="relative">
-            <Textarea
+          <div 
+            ref={codeDisplayRef}
+            className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 max-h-[250px] overflow-y-auto"
+            onClick={() => textareaRef.current?.focus()}
+          >
+            <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
+              {renderCode()}
+            </pre>
+            <textarea
               ref={textareaRef}
               value={userInput}
               onChange={(e) => onInputChange(e.target.value)}
-              className="w-full h-20 bg-dark-primary border border-dark-accent rounded-lg p-4 font-mono text-lg focus:outline-none focus:border-neon-cyan resize-none"
-              placeholder={isComplete ? "Test completed!" : "Start typing the code above..."}
               disabled={isComplete}
+              className="absolute top-0 left-0 w-full h-full p-4 bg-transparent text-transparent border-none resize-none focus:outline-none"
+              style={{ caretColor: 'transparent' }}
+              placeholder={isComplete ? "Test completed!" : "Start typing here..."}
               spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
             />
           </div>
           
-          {/* Live Stats */}
-          <div className="flex justify-between items-center mt-4 text-sm">
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">
               <span className="text-gray-400">
-                Characters: <span className="text-white">{userInput.length}/{code.length}</span>
+                Errors: <span className="text-red-400 font-semibold">{errors}</span>
               </span>
               <span className="text-gray-400">
-                Accuracy: <span className="text-green-400">{accuracy.toFixed(1)}%</span>
-              </span>
-              <span className="text-gray-400">
-                Errors: <span className="text-red-400">{errors}</span>
+                Accuracy: <span className="text-green-400 font-semibold">{accuracy.toFixed(1)}%</span>
               </span>
             </div>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReset}
-              className="border-neon-pink text-neon-pink hover:bg-neon-pink hover:text-white"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Reset
-            </Button>
+            <div className="flex space-x-4">
+              <Button
+                onClick={onReset}
+                variant="outline"
+                className="border-dark-accent text-gray-300 hover:bg-neon-pink hover:text-dark-primary"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+              <Button
+                onClick={onNext}
+                className="gradient-bg hover:scale-105 transition-transform shadow-lg"
+              >
+                Next Snippet
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

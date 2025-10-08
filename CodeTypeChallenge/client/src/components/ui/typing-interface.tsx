@@ -33,90 +33,75 @@ export default function TypingInterface({
   // Auto-scroll the code display as user types
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const activeLine = codeDisplayRef.current.querySelector('.active-line');
-      if (activeLine) {
-        activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const currentCharSpan = codeDisplayRef.current.querySelector(`[data-index="${userInput.length}"]`);
+      if (currentCharSpan) {
+        currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [userInput]);
+  }, [userInput.length]);
 
   // Auto-focus textarea when component mounts or activity changes
   useEffect(() => {
     if (isActive && !isComplete) {
-      textareaRef.current?.focus();
+        textareaRef.current?.focus();
+    } else if (!isComplete) {
+        textareaRef.current?.focus();
     }
   }, [isActive, isComplete]);
 
   const renderCode = () => {
-    const userInputLines = userInput.split('\n');
-    const codeLines = code.split('\n');
-    const currentLineIndex = userInputLines.length - 1;
-
-    return codeLines.map((line, lineIndex) => {
-      const isCurrentLine = lineIndex === currentLineIndex;
-      let lineContent;
-
-      if (lineIndex < currentLineIndex) {
-        // Line has been fully typed
-        lineContent = <span className="text-green-400">{line}</span>;
-      } else if (isCurrentLine) {
-        // This is the active typing line
-        const typedPart = userInputLines[currentLineIndex];
-        const untypedPart = line.substring(typedPart.length);
-        lineContent = (
-          <>
-            {typedPart.split('').map((char, charIndex) => {
-              const isCorrect = char === line[charIndex];
-              return (
-                <span key={charIndex} className={isCorrect ? 'text-green-400' : 'text-red-400 bg-red-500/30'}>
-                  {line[charIndex] === ' ' ? '\u00A0' : line[charIndex]}
-                </span>
-              );
-            })}
-            <span className="bg-neon-cyan/50 animate-pulse">{untypedPart.charAt(0) || '\u00A0'}</span>
-            <span className="text-gray-500">{untypedPart.substring(1)}</span>
-          </>
-        );
+    return code.split('').map((char, index) => {
+      let className = 'transition-colors duration-150'; // Default
+      
+      if (index < userInput.length) {
+        // Already typed - check if correct or incorrect
+        if (userInput[index] === char) {
+          className = 'text-green-400'; // Correct
+        } else {
+          className = 'text-red-400 bg-red-500/20'; // Incorrect
+        }
+      } else if (index === userInput.length && isActive) {
+        className = 'text-black bg-neon-cyan/80 rounded animate-pulse'; // Current cursor position
       } else {
-        // Future lines
-        lineContent = <span className="text-gray-500">{line}</span>;
+        className = 'text-gray-500'; // Not yet typed
       }
-
+      
       return (
-        <div key={lineIndex} className={isCurrentLine ? 'active-line' : ''}>
-          {lineContent}
-          {lineIndex < codeLines.length - 1 && '⏎\n'}
-        </div>
+        <span key={index} data-index={index} className={className}>
+          {char}
+        </span>
       );
     });
   };
 
   return (
     <div className="space-y-6">
-      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
-        <CardContent className="p-6">
+      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent overflow-hidden">
+        <CardContent className="p-6 relative">
           <div 
             ref={codeDisplayRef}
-            className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 max-h-[250px] overflow-y-auto"
+            className="bg-dark-primary border border-gray-700 rounded-lg p-4 max-h-[250px] overflow-y-auto mb-4"
             onClick={() => textareaRef.current?.focus()}
           >
-            <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
+            <pre className="font-mono text-lg leading-relaxed whitespace-pre-wrap break-words">
               {renderCode()}
             </pre>
-            <textarea
-              ref={textareaRef}
-              value={userInput}
-              onChange={(e) => onInputChange(e.target.value)}
-              disabled={isComplete}
-              className="absolute top-0 left-0 w-full h-full p-4 bg-transparent text-transparent border-none resize-none focus:outline-none"
-              style={{ caretColor: 'transparent' }}
-              placeholder={isComplete ? "Test completed!" : "Start typing here..."}
-              spellCheck={false}
-              autoCapitalize="off"
-              autoCorrect="off"
-              autoComplete="off"
-            />
           </div>
+
+          {/* This textarea is now completely invisible and just captures input */}
+          <Textarea
+            ref={textareaRef}
+            value={userInput}
+            onChange={(e) => onInputChange(e.target.value)}
+            disabled={isComplete}
+            className="absolute top-0 left-0 w-full h-full p-4 bg-transparent border-none resize-none focus:outline-none"
+            style={{ caretColor: 'transparent', color: 'transparent' }}
+            placeholder=""
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
+          />
           
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">

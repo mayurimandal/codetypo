@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(20, 14.3%, 4.1%);
+  --muted: hsl(60, 4.8%, 95.9%);
+  --muted-foreground: hsl(25, 5.3%, 44.7%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(20, 14.3%, 4.1%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(20, 14.3%, 4.1%);
+  --border: hsl(20, 5.9%, 90%);
+  --input: hsl(20, 5.9%, 90%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(60, 4.8%, 95.9%);
+  --secondary-foreground: hsl(24, 9.8%, 10%);
+  --accent: hsl(60, 4.8%, 95.9%);
+  --accent-foreground: hsl(24, 9.8%, 10%);
+  --destructive: hsl(0, 84.2%, 60.2%);
+  --destructive-foreground: hsl(60, 9.1%, 97.8%);
+  --ring: hsl(20, 14.3%, 4.1%);
+  --radius: 0.5rem;
+
+  /* Gaming theme colors */
+  --dark-primary: hsl(231, 44%, 8%);
+  --dark-secondary: hsl(226, 48%, 13%);
+  --dark-accent: hsl(213, 68%, 19%);
+  --neon-pink: hsl(348, 81%, 67%);
+  --neon-cyan: hsl(162, 91%, 53%);
+  --neon-blue: hsl(217, 91%, 60%);
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    background: var(--dark-primary);
+    color: white;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow-x: hidden;
+  }
+
+  .gaming-bg {
+    background: linear-gradient(135deg, var(--dark-primary) 0%, var(--dark-secondary) 50%, var(--dark-accent) 100%);
+  }
+
+  .code-highlight {
+    background: linear-gradient(135deg, hsl(215, 28%, 17%) 0%, hsl(220, 13%, 25%) 100%);
+  }
+
+  .typing-cursor {
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  @keyframes glow {
+    from { box-shadow: 0 0 20px hsl(348, 81%, 67%, 0.5); }
+    to { box-shadow: 0 0 30px hsl(348, 81%, 67%, 0.8); }
+  }
+
+  .glow-animation {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  .syntax-keyword { color: hsl(316, 73%, 69%); }
+  .syntax-string { color: hsl(142, 52%, 67%); }
+  .syntax-comment { color: hsl(215, 14%, 53%); }
+  .syntax-function { color: hsl(213, 94%, 68%); }
+  .syntax-number { color: hsl(45, 93%, 71%); }
+
+  .neon-pink { color: var(--neon-pink); }
+  .neon-cyan { color: var(--neon-cyan); }
+  .neon-blue { color: var(--neon-blue); }
+
+  .bg-dark-primary { background-color: var(--dark-primary); }
+  .bg-dark-secondary { background-color: var(--dark-secondary); }
+  .bg-dark-accent { background-color: var(--dark-accent); }
+  .bg-neon-pink { background-color: var(--neon-pink); }
+  .bg-neon-cyan { background-color: var(--neon-cyan); }
+  .bg-neon-blue { background-color: var(--neon-blue); }
+
+  .text-dark-primary { color: var(--dark-primary); }
+  .border-dark-accent { border-color: var(--dark-accent); }
+  .border-neon-cyan { border-color: var(--neon-cyan); }
+  .border-neon-pink { border-color: var(--neon-pink); }
+  .border-neon-blue { border-color: var(--neon-blue); }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan), var(--neon-blue));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-bg {
+    background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan));
+  }
+}

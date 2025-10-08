@@ -181,7 +181,7 @@ export default function TypingTest() {
     if (testState.isComplete) return;
     
     // Start test on first character
-    if (!testState.startTime && value.length === 1) {
+    if (!testState.startTime && value.length > 0) {
       setTestState(prev => ({
         ...prev,
         startTime: now,
@@ -189,17 +189,9 @@ export default function TypingTest() {
         userInput: value, 
       }));
       return;
-    }
-    
-    // Allow input update even if not fully 'active' (e.g., initial state)
-    if (!testState.isActive && value.length <= 0) {
-        setTestState(prev => ({ ...prev, userInput: value }));
-        return;
-    }
-
-    if (!testState.isActive && testState.startTime) {
-        setTestState(prev => ({ ...prev, userInput: value }));
-        return;
+    } else if (!testState.startTime) {
+      // Don't do anything if the test hasn't started and the input is empty
+      return;
     }
     
     // Check if test is complete

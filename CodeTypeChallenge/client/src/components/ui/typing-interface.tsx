@@ -1,8 +1,8 @@
 import { useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { RotateCcw, ArrowRight } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea"; // Ensure Textarea is imported
 
 interface TypingInterfaceProps {
   code: string;
@@ -30,42 +30,41 @@ export default function TypingInterface({
   const codeDisplayRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-focus the textarea to start typing
-  useEffect(() => {
-    if (!isComplete) {
-      textareaRef.current?.focus();
-    }
-  }, [isComplete, isActive]);
-
-  // Auto-scroll logic
+  // Auto-scroll the code display as user types
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const cursor = codeDisplayRef.current.querySelector('.cursor');
-      if (cursor) {
-        cursor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const currentCharSpan = codeDisplayRef.current.querySelector('.cursor');
+      if (currentCharSpan) {
+        currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [userInput]);
 
+  // Auto-focus textarea when component mounts
+  useEffect(() => {
+    if (textareaRef.current && !isComplete) {
+      textareaRef.current.focus();
+    }
+  }, [isComplete]);
+
   const renderCode = () => {
     return code.split('').map((char, index) => {
-      let className = 'text-yellow-400'; // Untyped characters
-
+      let className = 'text-gray-500'; // Not yet typed
+      
       if (index < userInput.length) {
-        className = userInput[index] === char ? 'text-green-400' : 'text-red-400 bg-red-500/20';
-      }
-
-      // Add a cursor span at the current typing position
-      if (index === userInput.length && isActive && !isComplete) {
-        return (
-          <span key="cursor" className="relative">
-            <span className="animate-pulse bg-neon-cyan/50 cursor">{char}</span>
-          </span>
-        );
+        // Already typed - check if correct or incorrect
+        if (userInput[index] === char) {
+          className = 'text-green-400'; // Correct
+        } else {
+          className = 'text-red-400 bg-red-500/20'; // Incorrect
+        }
+      } else if (index === userInput.length && isActive) {
+        // Current cursor position
+        className = 'text-white bg-neon-cyan/50 rounded animate-pulse cursor'; 
       }
       
       return (
-        <span key={index} className={className}>
+        <span key={index} data-index={index} className={className}>
           {char}
         </span>
       );
@@ -77,13 +76,9 @@ export default function TypingInterface({
       <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
         <CardContent className="p-6">
           <div className="mb-4">
-            <div className="text-sm mb-2 text-gray-400 font-mono flex justify-between items-center">
-              <span>Type the code below:</span>
-            </div>
-            <div
+            <div 
               ref={codeDisplayRef}
               className="bg-gray-900/50 border-2 border-gray-700 rounded-lg p-4 max-h-[300px] overflow-y-auto"
-              onClick={() => textareaRef.current?.focus()}
             >
               <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
                 {renderCode()}
@@ -112,9 +107,6 @@ export default function TypingInterface({
           
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">
-              <span className="text-gray-400">
-                Progress: <span className="text-neon-cyan font-semibold">{Math.round((userInput.length / (code.length || 1)) * 100)}%</span>
-              </span>
               <span className="text-gray-400">
                 Errors: <span className="text-red-400 font-semibold">{errors}</span>
               </span>

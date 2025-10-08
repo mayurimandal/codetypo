@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +25,15 @@ interface TestState {
   timeSpent: number;
 }
 
+// Interface for Snippet data to ensure type safety
+interface Snippet {
+  id: string;
+  languageId: string;
+  code: string;
+  difficulty: string;
+  title: string;
+}
+
 export default function TypingTest() {
   const params = useParams();
   const { user } = useAuth();
@@ -44,15 +53,22 @@ export default function TypingTest() {
   });
 
   const [showResults, setShowResults] = useState(false);
-  const [currentSnippet, setCurrentSnippet] = useState<any>(null);
+  const [currentSnippet, setCurrentSnippet] = useState<Snippet | null>(null);
 
   // Fetch random code snippet
-  const { data: snippet, refetch: fetchNewSnippet } = useQuery({
+  const { 
+    data: snippet, 
+    refetch: fetchNewSnippet, 
+    isLoading: isSnippetLoading, // ADDED for explicit loading check
+    isError: isSnippetError,     // ADDED for explicit error check
+  } = useQuery<Snippet>({
     queryKey: ["/api/languages", params.languageId, "snippets/random"],
     enabled: !!params.languageId,
+    // Good practice: prevent constant refetching while actively typing
+    staleTime: 60000, 
   });
 
-  // Get all languages for fallback
+  // Get all languages for fallback (optional, can be removed if not used)
   const { data: languages } = useQuery({
     queryKey: ["/api/languages"],
   });
@@ -69,7 +85,7 @@ export default function TypingTest() {
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
+          description: "Your session expired. Logging in again...",
           variant: "destructive",
         });
         setTimeout(() => {
@@ -79,13 +95,13 @@ export default function TypingTest() {
       }
       toast({
         title: "Error",
-        description: "Failed to save test result",
+        description: "Failed to save test result.",
         variant: "destructive",
       });
     },
   });
 
-  // Initialize test with snippet
+  // Initialize test with snippet data
   useEffect(() => {
     if (snippet) {
       setCurrentSnippet(snippet);
@@ -104,9 +120,9 @@ export default function TypingTest() {
     }
   }, [snippet]);
 
-  // Calculate WPM and accuracy
+  // Calculate WPM and accuracy logic
   const calculateStats = useCallback((input: string, text: string, timeElapsed: number) => {
-    const wordsTyped = input.length / 5; // Standard: 5 characters = 1 word
+    const wordsTyped = input.length / 5; 
     const wpm = timeElapsed > 0 ? (wordsTyped / (timeElapsed / 60000)) : 0;
     
     let correctChars = 0;
@@ -162,7 +178,6 @@ export default function TypingTest() {
     const now = Date.now();
     const text = testState.currentText;
 
-    // Restrict typing if already complete
     if (testState.isComplete) return;
     
     // Start test on first character
@@ -171,7 +186,7 @@ export default function TypingTest() {
         ...prev,
         startTime: now,
         isActive: true,
-        userInput: value, // Ensure input is updated immediately
+        userInput: value, 
       }));
       return;
     }
@@ -181,8 +196,7 @@ export default function TypingTest() {
         setTestState(prev => ({ ...prev, userInput: value }));
         return;
     }
-    
-    // Fallback to update input if test is active or has started
+
     if (!testState.isActive && testState.startTime) {
         setTestState(prev => ({ ...prev, userInput: value }));
         return;
@@ -197,12 +211,13 @@ export default function TypingTest() {
       ...prev,
       userInput: value,
       isComplete,
-      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0,
+      // Update time on every input change as well for responsiveness
+      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0, 
       ...stats,
     }));
     
     // Complete test
-    if (isComplete && !testState.isComplete) {
+    if (isComplete && !testState.isComplete && testState.startTime) {
       const finalStats = calculateStats(value, testState.currentText, timeElapsed);
       
       setTestState(prev => ({
@@ -231,8 +246,12 @@ export default function TypingTest() {
   // Reset test
   const resetTest = () => {
     setShowResults(false);
+    // Reset to the current snippet's code, or empty if somehow unset
+    const newCode = currentSnippet?.code || '';
+    
     setTestState(prev => ({
       ...prev,
+      currentText: newCode,
       userInput: '',
       startTime: null,
       isActive: false,
@@ -258,11 +277,36 @@ export default function TypingTest() {
   };
 
   // Calculate progress
-  const progress = testState.currentText.length > 0 
-    ? (testState.userInput.length / testState.currentText.length) * 100 
-    : 0;
+  const progress = useMemo(() => {
+    return testState.currentText.length > 0 
+      ? (testState.userInput.length / testState.currentText.length) * 100 
+      : 0;
+  }, [testState.currentText, testState.userInput.length]);
 
-  if (!params.languageId || (!currentSnippet && !snippet)) {
+  // === RENDER LOGIC START (Fixing blank page issue) ===
+
+  // 1. Show Loading State explicitly
+  if (isSnippetLoading) {
+    return (
+      <div className="min-h-screen bg-dark-primary">
+        <Navbar />
+        <div className="pt-16 flex items-center justify-center min-h-screen">
+          <Card className="max-w-md w-full mx-4">
+            <CardContent className="pt-6 text-center">
+              <Zap className="h-12 w-12 text-neon-cyan mx-auto mb-4 animate-pulse" />
+              <h2 className="text-xl font-bold mb-2">Loading Challenge...</h2>
+              <p className="text-gray-400">Fetching a new code snippet.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Show Error/No Snippets State (if fetching finished but no data)
+  const isReadyToRender = currentSnippet && params.languageId;
+
+  if (!isReadyToRender || isSnippetError) {
     return (
       <div className="min-h-screen bg-dark-primary">
         <Navbar />
@@ -273,8 +317,8 @@ export default function TypingTest() {
               <h2 className="text-xl font-bold mb-2">No Code Snippets Available</h2>
               <p className="text-gray-400 mb-4">
                 {params.languageId 
-                  ? "No code snippets found for this language" 
-                  : "Please select a language to start typing"}
+                  ? "No code snippets found for this language. Please try a different one." 
+                  : "Please select a language to start typing."}
               </p>
               <Button onClick={() => window.location.href = "/"}>
                 Go to Dashboard
@@ -285,7 +329,8 @@ export default function TypingTest() {
       </div>
     );
   }
-
+  
+  // 3. Main UI Render (Now only runs if data is present)
   return (
     <div className="min-h-screen bg-dark-primary">
       <Navbar />
@@ -295,17 +340,17 @@ export default function TypingTest() {
           {/* Test Header */}
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">
-              {currentSnippet?.title || 'Coding Challenge'}
+              {currentSnippet.title}
             </h2>
             <div className="flex justify-center items-center space-x-8 mb-6">
               <div className="flex items-center space-x-2">
                 <span className="text-gray-400">Difficulty:</span>
                 <span className={`px-3 py-1 rounded-full text-sm ${
-                  currentSnippet?.difficulty === 'beginner' ? 'bg-green-500/20 text-green-400' :
-                  currentSnippet?.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-400' :
+                  currentSnippet.difficulty === 'beginner' ? 'bg-green-500/20 text-green-400' :
+                  currentSnippet.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-400' :
                   'bg-red-500/20 text-red-400'
                 }`}>
-                  {currentSnippet?.difficulty || 'Unknown'}
+                  {currentSnippet.difficulty}
                 </span>
               </div>
               <div className="flex items-center space-x-2">

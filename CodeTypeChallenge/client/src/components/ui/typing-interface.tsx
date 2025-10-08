@@ -119,9 +119,6 @@ export default function TypingInterface({
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">
               <span className="text-gray-400">
-                Time: <span className="text-neon-cyan font-semibold">{timeRemaining}s</span>
-              </span>
-              <span className="text-gray-400">
                 Progress: <span className="text-neon-cyan font-semibold">{Math.round((userInput.length / code.length) * 100)}%</span>
               </span>
               <span className="text-gray-400">

@@ -39,7 +39,7 @@ export default function TypingTest() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [testState, setTestState] = useState<TestState>({
     currentText: '',
     userInput: '',
@@ -56,16 +56,15 @@ export default function TypingTest() {
   const [currentSnippet, setCurrentSnippet] = useState<Snippet | null>(null);
 
   // Fetch random code snippet
-  const { 
-    data: snippet, 
-    refetch: fetchNewSnippet, 
-    isLoading: isSnippetLoading, // ADDED for explicit loading check
-    isError: isSnippetError,     // ADDED for explicit error check
+  const {
+    data: snippet,
+    refetch: fetchNewSnippet,
+    isLoading: isSnippetLoading,
+    isError: isSnippetError,
   } = useQuery<Snippet>({
     queryKey: ["/api/languages", params.languageId, "snippets/random"],
     enabled: !!params.languageId,
-    // Good practice: prevent constant refetching while actively typing
-    staleTime: 60000, 
+    staleTime: 60000,
   });
 
   // Get all languages for fallback (optional, can be removed if not used)
@@ -122,12 +121,12 @@ export default function TypingTest() {
 
   // Calculate WPM and accuracy logic
   const calculateStats = useCallback((input: string, text: string, timeElapsed: number) => {
-    const wordsTyped = input.length / 5; 
+    const wordsTyped = input.length / 5;
     const wpm = timeElapsed > 0 ? (wordsTyped / (timeElapsed / 60000)) : 0;
-    
+
     let correctChars = 0;
     let errors = 0;
-    
+
     for (let i = 0; i < input.length; i++) {
       if (i < text.length && input[i] === text[i]) {
         correctChars++;
@@ -135,24 +134,24 @@ export default function TypingTest() {
         errors++;
       }
     }
-    
+
     const accuracy = input.length > 0 ? (correctChars / input.length) * 100 : 100;
-    
+
     return { wpm: Math.round(wpm), accuracy: Math.round(accuracy * 10) / 10, errors };
   }, []);
 
-  // FIX 2: Live timer and stats update
+  // Live timer and stats update
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (testState.isActive && !testState.isComplete) {
       interval = setInterval(() => {
         setTestState(prev => {
           if (!prev.startTime) return prev;
-          
+
           const timeElapsed = Date.now() - prev.startTime;
           const secondsElapsed = Math.round(timeElapsed / 1000);
-          
+
           if (secondsElapsed > prev.timeSpent) {
             const stats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
             return {
@@ -179,39 +178,39 @@ export default function TypingTest() {
     const text = testState.currentText;
 
     if (testState.isComplete) return;
-    
+
     // Start test on first character
     if (!testState.startTime && value.length > 0) {
       setTestState(prev => ({
         ...prev,
         startTime: now,
         isActive: true,
-        userInput: value, 
+        userInput: value,
       }));
       return;
     } else if (!testState.startTime) {
       // Don't do anything if the test hasn't started and the input is empty
       return;
     }
-    
+
     // Check if test is complete
     const isComplete = value.length >= text.length;
     const timeElapsed = testState.startTime ? now - testState.startTime : 0;
     const stats = calculateStats(value, text, timeElapsed);
-    
+
     setTestState(prev => ({
       ...prev,
       userInput: value,
       isComplete,
       // Update time on every input change as well for responsiveness
-      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0, 
+      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0,
       ...stats,
     }));
-    
+
     // Complete test
     if (isComplete && !testState.isComplete && testState.startTime) {
       const finalStats = calculateStats(value, testState.currentText, timeElapsed);
-      
+
       setTestState(prev => ({
         ...prev,
         isActive: false,
@@ -219,7 +218,7 @@ export default function TypingTest() {
         timeSpent: Math.round(timeElapsed / 1000),
         ...finalStats,
       }));
-      
+
       // Submit result
       if (currentSnippet && user) {
         submitResult.mutate({
@@ -230,7 +229,7 @@ export default function TypingTest() {
           errors: finalStats.errors,
         });
       }
-      
+
       setShowResults(true);
     }
   };
@@ -240,7 +239,7 @@ export default function TypingTest() {
     setShowResults(false);
     // Reset to the current snippet's code, or empty if somehow unset
     const newCode = currentSnippet?.code || '';
-    
+
     setTestState(prev => ({
       ...prev,
       currentText: newCode,
@@ -270,8 +269,8 @@ export default function TypingTest() {
 
   // Calculate progress
   const progress = useMemo(() => {
-    return testState.currentText.length > 0 
-      ? (testState.userInput.length / testState.currentText.length) * 100 
+    return testState.currentText.length > 0
+      ? (testState.userInput.length / testState.currentText.length) * 100
       : 0;
   }, [testState.currentText, testState.userInput.length]);
 
@@ -308,8 +307,8 @@ export default function TypingTest() {
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold mb-2">No Code Snippets Available</h2>
               <p className="text-gray-400 mb-4">
-                {params.languageId 
-                  ? "No code snippets found for this language. Please try a different one." 
+                {params.languageId
+                  ? "No code snippets found for this language. Please try a different one."
                   : "Please select a language to start typing."}
               </p>
               <Button onClick={() => window.location.href = "/"}>
@@ -321,12 +320,12 @@ export default function TypingTest() {
       </div>
     );
   }
-  
+
   // 3. Main UI Render (Now only runs if data is present)
   return (
     <div className="min-h-screen bg-dark-primary">
       <Navbar />
-      
+
       <main className="pt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Test Header */}
@@ -364,10 +363,10 @@ export default function TypingTest() {
                 </span>
               </div>
             </div>
-            
+
             {/* Progress Bar */}
-            <Progress 
-              value={progress} 
+            <Progress
+              value={progress}
               className="w-full mb-6 h-2 bg-dark-accent"
             />
           </div>

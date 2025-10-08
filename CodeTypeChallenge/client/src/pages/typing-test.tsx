@@ -92,7 +92,7 @@ export default function TypingTest() {
     const accuracy = input.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
     return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
   }, []);
-  
+
   const completeTest = useCallback(() => {
     setTestState(prev => {
       if (prev.isComplete || !prev.startTime) return prev;
@@ -114,7 +114,7 @@ export default function TypingTest() {
       return { ...prev, isActive: false, isComplete: true, ...finalStats };
     });
   }, [calculateStats, currentSnippet, user, submitResult]);
-  
+
   const resetTest = useCallback((newCode?: string) => {
     setShowResults(false);
     const codeToUse = newCode ?? currentSnippet?.code ?? '';
@@ -166,7 +166,7 @@ export default function TypingTest() {
       setTestState(prev => ({ ...prev, userInput: value }));
     }
   
-    if (value.length >= testState.currentText.length) {
+    if (value.length >= testState.currentText.length && testState.currentText.length > 0) {
       completeTest();
     }
   };

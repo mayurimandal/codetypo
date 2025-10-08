@@ -2,7 +2,7 @@ import { useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, ArrowRight } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; // Ensure Textarea is imported
 
 interface TypingInterfaceProps {
   code: string;
@@ -30,44 +30,42 @@ export default function TypingInterface({
   const codeDisplayRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll the code display as user types
+  // Auto-focus the textarea to start typing
+  useEffect(() => {
+    if (!isComplete) {
+      textareaRef.current?.focus();
+    }
+  }, [isComplete, isActive]);
+
+  // Auto-scroll logic
   useEffect(() => {
     if (codeDisplayRef.current) {
-      const currentCharSpan = codeDisplayRef.current.querySelector(`[data-index="${userInput.length}"]`);
-      if (currentCharSpan) {
-        currentCharSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const cursor = codeDisplayRef.current.querySelector('.cursor');
+      if (cursor) {
+        cursor.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [userInput.length]);
-
-  // Auto-focus textarea when component mounts or activity changes
-  useEffect(() => {
-    if (isActive && !isComplete) {
-        textareaRef.current?.focus();
-    } else if (!isComplete) {
-        textareaRef.current?.focus();
-    }
-  }, [isActive, isComplete]);
+  }, [userInput]);
 
   const renderCode = () => {
     return code.split('').map((char, index) => {
-      let className = 'transition-colors duration-150'; // Default
-      
+      let className = 'text-gray-500'; // Untyped characters
+
       if (index < userInput.length) {
-        // Already typed - check if correct or incorrect
-        if (userInput[index] === char) {
-          className = 'text-green-400'; // Correct
-        } else {
-          className = 'text-red-400 bg-red-500/20'; // Incorrect
-        }
-      } else if (index === userInput.length && isActive) {
-        className = 'text-black bg-neon-cyan/80 rounded animate-pulse'; // Current cursor position
-      } else {
-        className = 'text-gray-500'; // Not yet typed
+        className = userInput[index] === char ? 'text-green-400' : 'text-red-400 bg-red-500/20';
+      }
+
+      // Add a cursor span at the current typing position
+      if (index === userInput.length && isActive && !isComplete) {
+        return (
+          <span key="cursor" className="relative">
+            <span className="animate-pulse bg-neon-cyan/50 cursor">{char}</span>
+          </span>
+        );
       }
       
       return (
-        <span key={index} data-index={index} className={className}>
+        <span key={index} className={className}>
           {char}
         </span>
       );
@@ -76,35 +74,47 @@ export default function TypingInterface({
 
   return (
     <div className="space-y-6">
-      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent overflow-hidden">
-        <CardContent className="p-6 relative">
-          <div 
-            ref={codeDisplayRef}
-            className="bg-dark-primary border border-gray-700 rounded-lg p-4 max-h-[250px] overflow-y-auto mb-4"
-            onClick={() => textareaRef.current?.focus()}
-          >
-            <pre className="font-mono text-lg leading-relaxed whitespace-pre-wrap break-words">
-              {renderCode()}
-            </pre>
+      <Card className="bg-dark-secondary/70 backdrop-blur-sm border-dark-accent">
+        <CardContent className="p-6">
+          <div className="mb-4">
+            <div className="text-sm mb-2 text-gray-400 font-mono flex justify-between items-center">
+              <span>Type the code below:</span>
+            </div>
+            <div
+              ref={codeDisplayRef}
+              className="bg-gray-900/50 border-2 border-gray-700 rounded-lg p-4 max-h-[300px] overflow-y-auto"
+              onClick={() => textareaRef.current?.focus()}
+            >
+              <pre className="font-mono text-base leading-relaxed whitespace-pre-wrap break-words">
+                {renderCode()}
+              </pre>
+            </div>
           </div>
 
-          {/* This textarea is now completely invisible and just captures input */}
-          <Textarea
-            ref={textareaRef}
-            value={userInput}
-            onChange={(e) => onInputChange(e.target.value)}
-            disabled={isComplete}
-            className="absolute top-0 left-0 w-full h-full p-4 bg-transparent border-none resize-none focus:outline-none"
-            style={{ caretColor: 'transparent', color: 'transparent' }}
-            placeholder=""
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            autoComplete="off"
-          />
+          <div>
+            <div className="text-sm mb-2 text-gray-400 font-mono">
+              Your typing area:
+            </div>
+            <Textarea
+              ref={textareaRef}
+              value={userInput}
+              onChange={(e) => onInputChange(e.target.value)}
+              disabled={isComplete}
+              className="w-full h-[120px] bg-gray-900 text-gray-100 border-2 border-gray-700 rounded-lg p-4 font-mono text-base leading-relaxed resize-none focus:outline-none focus:border-neon-cyan focus:ring-2 focus:ring-neon-cyan/50 disabled:opacity-50"
+              placeholder={isComplete ? "Test completed!" : "Start typing here..."}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+              style={{ caretColor: '#2dd4bf' }}
+            />
+          </div>
           
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700 text-sm">
             <div className="flex space-x-6">
+              <span className="text-gray-400">
+                Progress: <span className="text-neon-cyan font-semibold">{Math.round((userInput.length / (code.length || 1)) * 100)}%</span>
+              </span>
               <span className="text-gray-400">
                 Errors: <span className="text-red-400 font-semibold">{errors}</span>
               </span>
@@ -112,26 +122,27 @@ export default function TypingInterface({
                 Accuracy: <span className="text-green-400 font-semibold">{accuracy.toFixed(1)}%</span>
               </span>
             </div>
-            <div className="flex space-x-4">
-              <Button
-                onClick={onReset}
-                variant="outline"
-                className="border-dark-accent text-gray-300 hover:bg-neon-pink hover:text-dark-primary"
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset
-              </Button>
-              <Button
-                onClick={onNext}
-                className="gradient-bg hover:scale-105 transition-transform shadow-lg"
-              >
-                Next Snippet
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex justify-center space-x-4">
+        <Button
+          onClick={onReset}
+          variant="outline"
+          className="border-dark-accent text-gray-300 hover:bg-neon-pink hover:text-dark-primary"
+        >
+          <RotateCcw className="h-4 w-4 mr-2" />
+          Reset
+        </Button>
+        <Button
+          onClick={onNext}
+          className="gradient-bg hover:scale-105 transition-transform shadow-lg"
+        >
+          Next Snippet
+          <ArrowRight className="h-4 w-4 ml-2" />
+        </Button>
+      </div>
     </div>
   );
 }

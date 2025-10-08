@@ -23,7 +23,7 @@ interface TestState {
   accuracy: number;
   errors: number;
   timeSpent: number;
-  timeRemaining: number; // Time remaining in seconds
+  timeRemaining: number;
 }
 
 interface Snippet {
@@ -69,10 +69,6 @@ export default function TypingTest() {
     staleTime: 60000,
   });
 
-  const { data: languages } = useQuery({
-    queryKey: ["/api/languages"],
-  });
-
   const submitResult = useMutation({
     mutationFn: async (result: any) => {
       await apiRequest("POST", "/api/test-results", result);
@@ -82,67 +78,38 @@ export default function TypingTest() {
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "Your session expired. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+        toast({ title: "Unauthorized", description: "Your session expired.", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+      } else {
+        toast({ title: "Error", description: "Failed to save test result.", variant: "destructive" });
       }
-      toast({
-        title: "Error",
-        description: "Failed to save test result.",
-        variant: "destructive",
-      });
     },
   });
 
   useEffect(() => {
     if (snippet) {
       setCurrentSnippet(snippet);
-      setTestState(prev => ({
-        ...prev,
-        currentText: snippet.code,
-        userInput: '',
-        startTime: null,
-        isActive: false,
-        isComplete: false,
-        wpm: 0,
-        accuracy: 0,
-        errors: 0,
-        timeSpent: 0,
-        timeRemaining: TEST_DURATION,
-      }));
+      resetTest(snippet.code);
     }
   }, [snippet]);
 
   const calculateStats = useCallback((input: string, text: string, timeElapsed: number) => {
     const wordsTyped = input.length / 5;
     const wpm = timeElapsed > 0 ? (wordsTyped / (timeElapsed / 60000)) : 0;
-
-    let correctChars = 0;
     let errors = 0;
-
     for (let i = 0; i < input.length; i++) {
-      if (i < text.length && input[i] === text[i]) {
-        correctChars++;
-      } else {
+      if (input[i] !== text[i]) {
         errors++;
       }
     }
-
-    const accuracy = input.length > 0 ? (correctChars / input.length) * 100 : 100;
-
-    return { wpm: Math.round(wpm), accuracy: Math.round(accuracy * 10) / 10, errors };
+    const accuracy = text.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
+    return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
   }, []);
 
   const completeTest = useCallback(() => {
     setTestState(prev => {
       if (prev.isComplete || !prev.startTime) return prev;
-
+      
       const timeElapsed = Date.now() - prev.startTime;
       const finalStats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
 
@@ -155,210 +122,95 @@ export default function TypingTest() {
           errors: finalStats.errors,
         });
       }
-  
       setShowResults(true);
 
-      return {
-        ...prev,
-        isActive: false,
-        isComplete: true,
-        timeSpent: Math.round(timeElapsed / 1000),
-        ...finalStats,
-      };
+      return { ...prev, isActive: false, isComplete: true, ...finalStats };
     });
-  }, [calculateStats, currentSnippet, user, submitResult, testState.currentText]);
+  }, [calculateStats, currentSnippet, user, submitResult]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    if (!testState.isActive || testState.isComplete) return;
 
-    if (testState.isActive && !testState.isComplete) {
-      interval = setInterval(() => {
-        setTestState(prev => {
-          if (!prev.startTime) return prev;
+    const timer = setInterval(() => {
+      setTestState(prev => {
+        if (!prev.startTime) return prev;
+        const secondsElapsed = Math.round((Date.now() - prev.startTime) / 1000);
+        const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
+        
+        const stats = calculateStats(prev.userInput, prev.currentText, secondsElapsed * 1000);
 
-          const timeElapsed = Date.now() - prev.startTime;
-          const secondsElapsed = Math.round(timeElapsed / 1000);
-          const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
+        if (timeRemaining === 0) {
+          completeTest();
+          return { ...prev, timeRemaining: 0, ...stats };
+        }
+        return { ...prev, timeRemaining, timeSpent: secondsElapsed, ...stats };
+      });
+    }, 1000);
 
-          if (timeRemaining === 0) {
-            completeTest();
-            return { ...prev, timeRemaining: 0 };
-          }
-          
-          const stats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
-          return {
-            ...prev,
-            timeSpent: secondsElapsed,
-            timeRemaining,
-            ...stats,
-          };
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [testState.isActive, testState.isComplete, testState.userInput, testState.currentText, calculateStats, completeTest]);
+    return () => clearInterval(timer);
+  }, [testState.isActive, testState.isComplete, testState.startTime, calculateStats, completeTest, testState.currentText]);
 
   const handleInputChange = (value: string) => {
-    const now = Date.now();
-    
     if (testState.isComplete) return;
 
-    if (!testState.startTime && value.length > 0) {
-      setTestState(prev => ({
-        ...prev,
-        startTime: now,
-        isActive: true,
-        userInput: value,
-      }));
-      return;
-    } else if (!testState.startTime) {
+    if (!testState.isActive && value.length > 0) {
+      setTestState(prev => ({ ...prev, isActive: true, startTime: Date.now(), userInput: value }));
       return;
     }
-
-    const isComplete = value.length >= testState.currentText.length;
     
-    if (isComplete) {
+    setTestState(prev => ({ ...prev, userInput: value }));
+
+    if (value.length >= testState.currentText.length) {
       completeTest();
-    } else {
-        setTestState(prev => ({
-            ...prev,
-            userInput: value,
-        }));
     }
   };
 
-  const resetTest = () => {
+  const resetTest = (newCode?: string) => {
     setShowResults(false);
-    const newCode = currentSnippet?.code || '';
-
-    setTestState(prev => ({
-      ...prev,
-      currentText: newCode,
+    setTestState({
+      currentText: newCode ?? currentSnippet?.code ?? '',
       userInput: '',
       startTime: null,
       isActive: false,
       isComplete: false,
       wpm: 0,
-      accuracy: 0,
+      accuracy: 100,
       errors: 0,
       timeSpent: 0,
       timeRemaining: TEST_DURATION,
-    }));
+    });
   };
 
-  const nextSnippet = () => {
-    fetchNewSnippet();
-    setShowResults(false);
-  };
+  const nextSnippet = () => fetchNewSnippet();
+  const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+  const progress = useMemo(() => testState.currentText.length > 0 ? (testState.userInput.length / testState.currentText.length) * 100 : 0, [testState.currentText.length, testState.userInput.length]);
+  const getTimerColor = () => testState.timeRemaining < 10 ? 'text-red-400 animate-pulse' : testState.timeRemaining < 60 ? 'text-yellow-400' : 'neon-cyan';
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const progress = useMemo(() => {
-    return testState.currentText.length > 0
-      ? (testState.userInput.length / testState.currentText.length) * 100
-      : 0;
-  }, [testState.currentText.length, testState.userInput.length]);
-
-  const getTimerColor = () => {
-    if (testState.timeRemaining > 60) return 'neon-cyan';
-    if (testState.timeRemaining > 30) return 'text-yellow-400';
-    return 'text-red-400 animate-pulse';
-  };
-
-  if (isSnippetLoading) {
-    return (
-      <div className="min-h-screen bg-dark-primary">
-        <Navbar />
-        <div className="pt-16 flex items-center justify-center min-h-screen">
-          <Card className="max-w-md w-full mx-4">
-            <CardContent className="pt-6 text-center">
-              <Zap className="h-12 w-12 text-neon-cyan mx-auto mb-4 animate-pulse" />
-              <h2 className="text-xl font-bold mb-2">Loading Challenge...</h2>
-              <p className="text-gray-400">Fetching a new code snippet.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  const isReadyToRender = currentSnippet && params.languageId;
-
-  if (!isReadyToRender || isSnippetError) {
-    return (
-      <div className="min-h-screen bg-dark-primary">
-        <Navbar />
-        <div className="pt-16 flex items-center justify-center min-h-screen">
-          <Card className="max-w-md w-full mx-4">
-            <CardContent className="pt-6 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-xl font-bold mb-2">No Code Snippets Available</h2>
-              <p className="text-gray-400 mb-4">
-                {params.languageId
-                  ? "No code snippets found for this language. Please try a different one."
-                  : "Please select a language to start typing."}
-              </p>
-              <Button onClick={() => window.location.href = "/"}>
-                Go to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  if (isSnippetLoading) return <div>Loading...</div>;
+  if (isSnippetError || !currentSnippet) return <div>Error loading snippet.</div>;
 
   return (
     <div className="min-h-screen bg-dark-primary">
       <Navbar />
-
       <main className="pt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold mb-4">
-              {currentSnippet.title}
-            </h2>
+            <h2 className="text-3xl font-bold mb-4">{currentSnippet.title}</h2>
             <div className="flex justify-center items-center space-x-8 mb-6">
               <div className="flex items-center space-x-2">
-                <span className="text-gray-400">Difficulty:</span>
-                <span className={`px-3 py-1 rounded-full text-sm ${
-                  currentSnippet.difficulty === 'beginner' ? 'bg-green-500/20 text-green-400' :
-                  currentSnippet.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {currentSnippet.difficulty}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
                 <Clock className="h-5 w-5 text-gray-400" />
-                <span className={`font-mono text-2xl font-bold ${getTimerColor()}`}>
-                  {formatTime(testState.timeRemaining)}
-                </span>
+                <span className={`font-mono text-2xl font-bold ${getTimerColor()}`}>{formatTime(testState.timeRemaining)}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Zap className="h-4 w-4 text-gray-400" />
-                <span className="neon-pink font-mono text-xl">
-                  {testState.wpm} WPM
-                </span>
+                <span className="neon-pink font-mono text-xl">{testState.wpm} WPM</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Target className="h-4 w-4 text-gray-400" />
-                <span className="neon-blue font-mono text-xl">
-                  {testState.accuracy}%
-                </span>
+                <span className="neon-blue font-mono text-xl">{testState.accuracy.toFixed(1)}%</span>
               </div>
             </div>
-
-            <Progress
-              value={progress}
-              className="w-full mb-6 h-2 bg-dark-accent"
-            />
+            <Progress value={progress} className="w-full mb-6 h-2 bg-dark-accent" />
           </div>
 
           <TypingInterface
@@ -369,7 +221,7 @@ export default function TypingTest() {
             isComplete={testState.isComplete}
             errors={testState.errors}
             accuracy={testState.accuracy}
-            onReset={resetTest}
+            onReset={() => resetTest()}
             onNext={nextSnippet}
           />
         </div>
@@ -384,7 +236,7 @@ export default function TypingTest() {
           time: formatTime(testState.timeSpent),
           errors: testState.errors,
         }}
-        onTryAgain={resetTest}
+        onTryAgain={() => resetTest()}
         onNextChallenge={nextSnippet}
       />
     </div>

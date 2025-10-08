@@ -93,10 +93,10 @@ export default function ResultsModal({
           >
             Try Again
           </Button>
-          <Button
+           <Button
             onClick={onNextChallenge}
             variant="outline"
-            className="flex-1 border-dark-accent text-white hover:bg-dark-accent/80 font-semibold"
+            className="flex-1 border-dark-accent text-black hover:bg-dark-accent/80 font-semibold"
           >
             Next Challenge
           </Button>

@@ -140,29 +140,34 @@ export default function TypingTest() {
   }, []);
 
   // Complete the test
-  const completeTest = useCallback((finalInput: string, finalTime: number) => {
-    const finalStats = calculateStats(finalInput, testState.currentText, finalTime);
+  const completeTest = useCallback(() => {
+    setTestState(prev => {
+      if (prev.isComplete || !prev.startTime) return prev;
 
-    setTestState(prev => ({
-      ...prev,
-      isActive: false,
-      isComplete: true,
-      timeSpent: Math.round(finalTime / 1000),
-      ...finalStats,
-    }));
+      const timeElapsed = Date.now() - prev.startTime;
+      const finalStats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
 
-    if (currentSnippet && user) {
-      submitResult.mutate({
-        snippetId: currentSnippet.id,
-        wpm: finalStats.wpm,
-        accuracy: finalStats.accuracy,
-        timeSpent: Math.round(finalTime / 1000),
-        errors: finalStats.errors,
-      });
-    }
+      if (currentSnippet && user) {
+        submitResult.mutate({
+          snippetId: currentSnippet.id,
+          wpm: finalStats.wpm,
+          accuracy: finalStats.accuracy,
+          timeSpent: Math.round(timeElapsed / 1000),
+          errors: finalStats.errors,
+        });
+      }
+  
+      setShowResults(true);
 
-    setShowResults(true);
-  }, [testState.currentText, currentSnippet, user, submitResult, calculateStats]);
+      return {
+        ...prev,
+        isActive: false,
+        isComplete: true,
+        timeSpent: Math.round(timeElapsed / 1000),
+        ...finalStats,
+      };
+    });
+  }, [calculateStats, currentSnippet, user, submitResult]);
 
   // Timer and stats update
   useEffect(() => {
@@ -177,42 +182,31 @@ export default function TypingTest() {
           const secondsElapsed = Math.round(timeElapsed / 1000);
           const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
 
-          // Time's up!
-          if (timeRemaining === 0 && !prev.isComplete) {
-            completeTest(prev.userInput, timeElapsed);
-            return {
-              ...prev,
-              timeRemaining: 0,
-            };
+          if (timeRemaining === 0) {
+            completeTest();
+            return { ...prev, timeRemaining: 0 };
           }
-
-          if (secondsElapsed > prev.timeSpent) {
-            const stats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
-            return {
-              ...prev,
-              timeSpent: secondsElapsed,
-              timeRemaining,
-              ...stats,
-            };
-          }
-          return { ...prev, timeRemaining };
+          
+          const stats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
+          return {
+            ...prev,
+            timeSpent: secondsElapsed,
+            timeRemaining,
+            ...stats,
+          };
         });
       }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [testState.isActive, testState.isComplete, calculateStats, completeTest]);
+  }, [testState.isActive, testState.isComplete, calculateStats, completeTest, testState.currentText]);
 
   const handleInputChange = (value: string) => {
     const now = Date.now();
-    const text = testState.currentText;
-
+    
     if (testState.isComplete) return;
 
-    // Start test on first character
     if (!testState.startTime && value.length > 0) {
       setTestState(prev => ({
         ...prev,
@@ -225,22 +219,15 @@ export default function TypingTest() {
       return;
     }
 
-    // Check if test is complete (typed all characters)
-    const isComplete = value.length >= text.length;
-    const timeElapsed = testState.startTime ? now - testState.startTime : 0;
-    const stats = calculateStats(value, text, timeElapsed);
-
-    setTestState(prev => ({
-      ...prev,
-      userInput: value,
-      isComplete,
-      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0,
-      ...stats,
-    }));
-
-    // Complete test if all text is typed
-    if (isComplete && !testState.isComplete && testState.startTime) {
-      completeTest(value, timeElapsed);
+    const isComplete = value.length >= testState.currentText.length;
+    
+    if (isComplete) {
+      completeTest();
+    } else {
+        setTestState(prev => ({
+            ...prev,
+            userInput: value,
+        }));
     }
   };
 
@@ -278,11 +265,10 @@ export default function TypingTest() {
     return testState.currentText.length > 0
       ? (testState.userInput.length / testState.currentText.length) * 100
       : 0;
-  }, [testState.currentText, testState.userInput.length]);
+  }, [testState.currentText.length, testState.userInput.length]);
 
-  // Determine timer color based on remaining time
   const getTimerColor = () => {
-    if (testState.timeRemaining > 60) return 'text-green-400';
+    if (testState.timeRemaining > 60) return 'neon-cyan';
     if (testState.timeRemaining > 30) return 'text-yellow-400';
     return 'text-red-400 animate-pulse';
   };
@@ -336,7 +322,6 @@ export default function TypingTest() {
 
       <main className="pt-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Test Header */}
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">
               {currentSnippet.title}
@@ -372,14 +357,12 @@ export default function TypingTest() {
               </div>
             </div>
 
-            {/* Progress Bar */}
             <Progress
               value={progress}
               className="w-full mb-6 h-2 bg-dark-accent"
             />
           </div>
 
-          {/* Typing Interface */}
           <TypingInterface
             code={testState.currentText}
             userInput={testState.userInput}
@@ -394,7 +377,6 @@ export default function TypingTest() {
         </div>
       </main>
 
-      {/* Results Modal */}
       <ResultsModal
         isOpen={showResults}
         onClose={() => setShowResults(false)}

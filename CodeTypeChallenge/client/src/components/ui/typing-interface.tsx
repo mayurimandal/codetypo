@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RefreshCw, ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils"; // <-- NEW IMPORT
+import { cn } from "@/lib/utils";
 
 // Basic keywords for rudimentary highlighting across all languages
 const KEYWORDS = new Set([
@@ -85,10 +85,10 @@ export default function TypingInterface({
             inString = false;
         } 
         
-        // String Detection (simple toggle - will break on multiline/escaped quotes)
-        else if (char === '\"' || char === \"'\") {
+        // String Detection (FIXED SYNTAX ERROR HERE)
+        else if (char === '"' || char === "'") { 
             // Check if it's an escaped quote
-            if (i === 0 || line[i - 1] !== '\\\\') {
+            if (i === 0 || line[i - 1] !== '\\') {
                 inString = !inString;
             }
             syntaxClassName = 'syntax-string';

@@ -28,7 +28,6 @@ interface TestState {
 
 interface Snippet {
   id: string;
-  languageId: string;
   code: string;
   difficulty: string;
   title: string;
@@ -49,7 +48,7 @@ export default function TypingTest() {
     isActive: false,
     isComplete: false,
     wpm: 0,
-    accuracy: 0,
+    accuracy: 100,
     errors: 0,
     timeSpent: 0,
     timeRemaining: TEST_DURATION,
@@ -70,39 +69,52 @@ export default function TypingTest() {
   });
 
   const submitResult = useMutation({
-    mutationFn: async (result: any) => {
-      await apiRequest("POST", "/api/test-results", result);
-    },
+    mutationFn: (result: any) => apiRequest("POST", "/api/test-results", result),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "stats"] });
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
         toast({ title: "Unauthorized", description: "Your session expired.", variant: "destructive" });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
       } else {
         toast({ title: "Error", description: "Failed to save test result.", variant: "destructive" });
       }
     },
   });
 
+  const resetTest = useCallback((newCode?: string) => {
+    setShowResults(false);
+    setTestState({
+      currentText: newCode ?? currentSnippet?.code ?? '',
+      userInput: '',
+      startTime: null,
+      isActive: false,
+      isComplete: false,
+      wpm: 0,
+      accuracy: 100,
+      errors: 0,
+      timeSpent: 0,
+      timeRemaining: TEST_DURATION,
+    });
+  }, [currentSnippet]);
+
   useEffect(() => {
     if (snippet) {
       setCurrentSnippet(snippet);
       resetTest(snippet.code);
     }
-  }, [snippet]);
+  }, [snippet, resetTest]);
 
-  const calculateStats = useCallback((input: string, text: string, timeElapsed: number) => {
+  const calculateStats = useCallback((input: string, text: string, timeElapsedMs: number) => {
     const wordsTyped = input.length / 5;
-    const wpm = timeElapsed > 0 ? (wordsTyped / (timeElapsed / 60000)) : 0;
+    const wpm = timeElapsedMs > 0 ? (wordsTyped / (timeElapsedMs / 60000)) : 0;
     let errors = 0;
     for (let i = 0; i < input.length; i++) {
       if (input[i] !== text[i]) {
         errors++;
       }
     }
-    const accuracy = text.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
+    const accuracy = input.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
     return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
   }, []);
 
@@ -126,59 +138,43 @@ export default function TypingTest() {
 
       return { ...prev, isActive: false, isComplete: true, ...finalStats };
     });
-  }, [calculateStats, currentSnippet, user, submitResult]);
+  }, [calculateStats, currentSnippet, user, submitResult, testState.currentText]);
 
   useEffect(() => {
     if (!testState.isActive || testState.isComplete) return;
 
     const timer = setInterval(() => {
-      setTestState(prev => {
-        if (!prev.startTime) return prev;
-        const secondsElapsed = Math.round((Date.now() - prev.startTime) / 1000);
-        const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
-        
-        const stats = calculateStats(prev.userInput, prev.currentText, secondsElapsed * 1000);
+      const secondsElapsed = testState.startTime ? Math.round((Date.now() - testState.startTime) / 1000) : 0;
+      const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
 
-        if (timeRemaining === 0) {
-          completeTest();
-          return { ...prev, timeRemaining: 0, ...stats };
-        }
-        return { ...prev, timeRemaining, timeSpent: secondsElapsed, ...stats };
-      });
+      if (timeRemaining === 0) {
+        completeTest();
+      }
+      
+      setTestState(prev => ({ ...prev, timeRemaining, timeSpent: secondsElapsed }));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [testState.isActive, testState.isComplete, testState.startTime, calculateStats, completeTest, testState.currentText]);
+  }, [testState.isActive, testState.isComplete, testState.startTime, completeTest]);
 
   const handleInputChange = (value: string) => {
     if (testState.isComplete) return;
 
-    if (!testState.isActive && value.length > 0) {
-      setTestState(prev => ({ ...prev, isActive: true, startTime: Date.now(), userInput: value }));
-      return;
+    let startTime = testState.startTime;
+    if (!startTime && value.length > 0) {
+      startTime = Date.now();
+      setTestState(prev => ({ ...prev, isActive: true, startTime }));
     }
-    
-    setTestState(prev => ({ ...prev, userInput: value }));
+
+    if (startTime) {
+      const timeElapsed = Date.now() - startTime;
+      const stats = calculateStats(value, testState.currentText, timeElapsed);
+      setTestState(prev => ({ ...prev, userInput: value, ...stats }));
+    }
 
     if (value.length >= testState.currentText.length) {
       completeTest();
     }
-  };
-
-  const resetTest = (newCode?: string) => {
-    setShowResults(false);
-    setTestState({
-      currentText: newCode ?? currentSnippet?.code ?? '',
-      userInput: '',
-      startTime: null,
-      isActive: false,
-      isComplete: false,
-      wpm: 0,
-      accuracy: 100,
-      errors: 0,
-      timeSpent: 0,
-      timeRemaining: TEST_DURATION,
-    });
   };
 
   const nextSnippet = () => fetchNewSnippet();
@@ -186,8 +182,8 @@ export default function TypingTest() {
   const progress = useMemo(() => testState.currentText.length > 0 ? (testState.userInput.length / testState.currentText.length) * 100 : 0, [testState.currentText.length, testState.userInput.length]);
   const getTimerColor = () => testState.timeRemaining < 10 ? 'text-red-400 animate-pulse' : testState.timeRemaining < 60 ? 'text-yellow-400' : 'neon-cyan';
 
-  if (isSnippetLoading) return <div>Loading...</div>;
-  if (isSnippetError || !currentSnippet) return <div>Error loading snippet.</div>;
+  if (isSnippetLoading) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Loading Challenge...</div>;
+  if (isSnippetError || !currentSnippet) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Error loading snippet. Please try another language.</div>;
 
   return (
     <div className="min-h-screen bg-dark-primary">
@@ -196,7 +192,7 @@ export default function TypingTest() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">{currentSnippet.title}</h2>
-            <div className="flex justify-center items-center space-x-8 mb-6">
+            <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-2 mb-6">
               <div className="flex items-center space-x-2">
                 <Clock className="h-5 w-5 text-gray-400" />
                 <span className={`font-mono text-2xl font-bold ${getTimerColor()}`}>{formatTime(testState.timeRemaining)}</span>

@@ -19,6 +19,11 @@ export default function Home() {
     queryKey: ["/api/languages"],
   });
 
+  // FIX 1: Determine the default path using the first available language ID
+  const defaultTestPath = languages && languages.length > 0 
+    ? `/test/${languages[0].id}` 
+    : "/test";
+
   return (
     <div className="min-h-screen bg-dark-primary">
       <Navbar />
@@ -34,7 +39,7 @@ export default function Home() {
               Level up your programming speed with real code snippets from popular languages. 
               Track your progress and compete with developers worldwide.
             </p>
-            <Link href="/test">
+            <Link href={defaultTestPath}>
               <Button className="gradient-bg px-8 py-4 text-lg font-semibold hover:scale-105 transition-transform shadow-lg">
                 Start Typing Challenge
               </Button>
@@ -110,7 +115,7 @@ export default function Home() {
                 <p className="text-gray-400 mb-4">
                   Jump into a random coding challenge to warm up your fingers
                 </p>
-                <Link href="/test">
+                <Link href={defaultTestPath}>
                   <Button className="w-full gradient-bg">
                     Random Challenge
                   </Button>

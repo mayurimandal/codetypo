@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 
 // Basic keywords for rudimentary highlighting across all languages
 const KEYWORDS = new Set([
-  "def", "import", "return", "if", "elif", "else", "while", "for", "in", "range", 
-  "const", "let", "var", "function", "async", "await", "try", "catch", "new", 
+  "def", "import", "return", "if", "elif", "else", "while", "for", "in", "range",
+  "const", "let", "var", "function", "async", "await", "try", "catch", "new",
   "class", "public", "private", "void", "String", "int", "float", "this", "#include",
   "java", "static", "final", "System", "out", "print", "console", "log", "export",
   "interface", "type", "true", "false", "null", "undefined", "continue", "break"
@@ -70,13 +70,11 @@ export default function TypingInterface({
         const container = codeDisplayRef.current;
         
         const containerHeight = container.offsetHeight;
-        const lineOffset = containerHeight / 3; 
+        const lineOffset = containerHeight / 3;
 
-        // Scroll down if current line is near or below the bottom third
         if (targetLine.offsetTop > container.scrollTop + containerHeight - lineOffset) {
              container.scrollTop = targetLine.offsetTop - containerHeight + lineOffset;
         } 
-        // Scroll up if current line is near or above the top third
         else if (targetLine.offsetTop < container.scrollTop + lineOffset) {
              container.scrollTop = targetLine.offsetTop - lineOffset;
         }
@@ -97,13 +95,12 @@ export default function TypingInterface({
 
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
-        
         let syntaxClassName = '';
-        // FIX: Moved variable declarations to the top of the loop scope
+        
+        // FIX: Moved variable declarations to the top of the loop's scope
         let word = '';
         let endOfWord = i;
         
-        // 1. Determine Syntax Status 
         const remainingLine = line.substring(i);
         
         if (remainingLine.startsWith('//') || remainingLine.startsWith('#')) {
@@ -147,7 +144,6 @@ export default function TypingInterface({
             }
         }
 
-        // 2. Determine Typing Status
         let finalClassName = '';
 
         if (globalIndex < userInput.length) {
@@ -161,7 +157,6 @@ export default function TypingInterface({
         
         renderedLine += `<span class="${finalClassName}">${char === ' ' ? '&nbsp;' : char}</span>`;
         
-        // If a word token was matched, advance the index
         if (syntaxClassName && (syntaxClassName === 'syntax-keyword' || syntaxClassName === 'syntax-number' || syntaxClassName === 'syntax-function')) {
             const wordLength = word.length;
             if (wordLength > 1 && i === endOfWord - wordLength) {

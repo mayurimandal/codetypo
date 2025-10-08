@@ -47,7 +47,7 @@ export default function TypingInterface({
   useEffect(() => {
     const interval = setInterval(() => {
       setShowCursor(prev => !prev);
-    }, 500); // Changed to 500ms for a more natural blink speed
+    }, 500);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,7 +61,7 @@ export default function TypingInterface({
   // Determine current line index for scrolling
   const currentLineIndex = userInput.split('\n').length - 1;
 
-  // FIX 3: Auto-scroll logic for code display to keep current line visible
+  // Auto-scroll logic for code display to keep current line visible
   useEffect(() => {
     if (codeDisplayRef.current) {
       const lines = codeDisplayRef.current.children;
@@ -69,7 +69,6 @@ export default function TypingInterface({
         const targetLine = lines[currentLineIndex] as HTMLElement;
         const container = codeDisplayRef.current;
         
-        // Use container/3 as a scroll offset to keep the current line visible but not right at the edge
         const containerHeight = container.offsetHeight;
         const lineOffset = containerHeight / 3; 
 
@@ -89,7 +88,7 @@ export default function TypingInterface({
   // Render code with syntax highlighting
   const renderCodeWithHighlight = () => {
     const lines = code.split('\n');
-    let globalIndex = 0; // Track the absolute character index in the code
+    let globalIndex = 0;
     let inString = false;
     
     return lines.map((line, lineIndex) => {
@@ -100,13 +99,13 @@ export default function TypingInterface({
         const char = line[i];
         
         let syntaxClassName = '';
+        // FIX: Moved variable declarations to the top of the loop scope
         let word = '';
         let endOfWord = i;
         
         // 1. Determine Syntax Status 
         const remainingLine = line.substring(i);
         
-        // Check for line comments (Python #, JS/C++ //)
         if (remainingLine.startsWith('//') || remainingLine.startsWith('#')) {
             isLineComment = true;
         }
@@ -116,9 +115,7 @@ export default function TypingInterface({
             inString = false;
         } 
         
-        // String Detection (FIXED SYNTAX ERROR HERE)
         else if (char === '"' || char === "'") { 
-            // Check if it's an escaped quote
             if (i === 0 || line[i - 1] !== '\\') {
                 inString = !inString;
             }
@@ -127,17 +124,12 @@ export default function TypingInterface({
             syntaxClassName = 'syntax-string';
         }
         
-        // Keyword, Function, Number Detection (only if not in comment or string)
         else if (isWordChar(char)) {
-
-            
-            // Extract the full word from the current position
             while (endOfWord < line.length && isWordChar(line[endOfWord])) {
                 word += line[endOfWord];
                 endOfWord++;
             }
             
-            // Check if the current character is the start of a classified token
             if ((i === 0 || !isWordChar(line[i - 1])) && word.length > 0) {
                 if (KEYWORDS.has(word)) {
                     syntaxClassName = 'syntax-keyword';
@@ -155,18 +147,15 @@ export default function TypingInterface({
             }
         }
 
-        // 2. Determine Typing Status (Highest Priority)
+        // 2. Determine Typing Status
         let finalClassName = '';
 
         if (globalIndex < userInput.length) {
-          // Typed characters: Green/Red takes absolute priority
           const userChar = userInput[globalIndex];
           finalClassName = userChar === char ? 'text-green-400 bg-green-400/20' : 'text-red-400 bg-red-400/20';
         } else if (globalIndex === userInput.length && isActive && !isComplete) {
-          // Cursor position
           finalClassName = cn(`bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`);
         } else {
-          // Untyped text: Apply syntax highlighting or default gray
           finalClassName = syntaxClassName || 'text-gray-400';
         }
         
@@ -176,14 +165,9 @@ export default function TypingInterface({
         if (syntaxClassName && (syntaxClassName === 'syntax-keyword' || syntaxClassName === 'syntax-number' || syntaxClassName === 'syntax-function')) {
             const wordLength = word.length;
             if (wordLength > 1 && i === endOfWord - wordLength) {
-                // Adjust index pointers to account for the full word token.
-                // We advance 'i' by 'wordLength - 1' because 'i' will increment by 1
-                // at the end of the for loop. We advance 'globalIndex' by the full length
-                // minus the 1 count it just got.
                 i += wordLength - 1;
                 globalIndex += wordLength - 1;
                 
-                // Reset for the next character outside the token
                 syntaxClassName = '';
                 word = '';
             } else {
@@ -217,7 +201,6 @@ export default function TypingInterface({
             </Button>
           </div>
           
-          {/* FIX 3: Added ref, max-h and overflow for scrolling */}
           <div ref={codeDisplayRef} className="font-mono text-lg max-h-64 overflow-y-auto">
             {renderCodeWithHighlight()}
           </div>
@@ -236,7 +219,6 @@ export default function TypingInterface({
               ref={textareaRef}
               value={userInput}
               onChange={(e) => onInputChange(e.target.value)}
-              // FIX 3: Reduced height from h-40 to h-20 for more screen space
               className="w-full h-20 bg-dark-primary border border-dark-accent rounded-lg p-4 font-mono text-lg focus:outline-none focus:border-neon-cyan resize-none"
               placeholder={isComplete ? "Test completed!" : "Start typing the code above..."}
               disabled={isComplete}

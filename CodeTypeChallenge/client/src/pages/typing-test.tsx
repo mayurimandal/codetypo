@@ -61,7 +61,6 @@ export default function TypingTest() {
     data: snippet,
     refetch: fetchNewSnippet,
     isLoading: isSnippetLoading,
-    isError: isSnippetError,
   } = useQuery<Snippet>({
     queryKey: ["/api/languages", params.languageId, "snippets/random"],
     enabled: !!params.languageId,
@@ -81,11 +80,34 @@ export default function TypingTest() {
       }
     },
   });
+  
+  const completeTest = useCallback(() => {
+    setTestState(prev => {
+      if (prev.isComplete || !prev.startTime) return prev;
+      
+      const timeElapsed = Date.now() - prev.startTime;
+      const finalStats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
+
+      if (currentSnippet && user) {
+        submitResult.mutate({
+          snippetId: currentSnippet.id,
+          wpm: finalStats.wpm,
+          accuracy: finalStats.accuracy,
+          timeSpent: Math.round(timeElapsed / 1000),
+          errors: finalStats.errors,
+        });
+      }
+      setShowResults(true);
+
+      return { ...prev, isActive: false, isComplete: true, ...finalStats };
+    });
+  }, [currentSnippet, user, submitResult]);
 
   const resetTest = useCallback((newCode?: string) => {
     setShowResults(false);
+    const codeToUse = newCode ?? currentSnippet?.code ?? '';
     setTestState({
-      currentText: newCode ?? currentSnippet?.code ?? '',
+      currentText: codeToUse,
       userInput: '',
       startTime: null,
       isActive: false,
@@ -118,62 +140,34 @@ export default function TypingTest() {
     return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
   }, []);
 
-  const completeTest = useCallback(() => {
-    setTestState(prev => {
-      if (prev.isComplete || !prev.startTime) return prev;
-      
-      const timeElapsed = Date.now() - prev.startTime;
-      const finalStats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
-
-      if (currentSnippet && user) {
-        submitResult.mutate({
-          snippetId: currentSnippet.id,
-          wpm: finalStats.wpm,
-          accuracy: finalStats.accuracy,
-          timeSpent: Math.round(timeElapsed / 1000),
-          errors: finalStats.errors,
-        });
-      }
-      setShowResults(true);
-
-      return { ...prev, isActive: false, isComplete: true, ...finalStats };
-    });
-  }, [calculateStats, currentSnippet, user, submitResult, testState.currentText]);
-
   useEffect(() => {
     if (!testState.isActive || testState.isComplete) return;
 
     const timer = setInterval(() => {
       const secondsElapsed = testState.startTime ? Math.round((Date.now() - testState.startTime) / 1000) : 0;
       const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
-
+      
       if (timeRemaining === 0) {
         completeTest();
       }
       
-      setTestState(prev => ({ ...prev, timeRemaining, timeSpent: secondsElapsed }));
+      const stats = calculateStats(testState.userInput, testState.currentText, secondsElapsed * 1000);
+      setTestState(prev => ({ ...prev, timeRemaining, timeSpent: secondsElapsed, ...stats }));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [testState.isActive, testState.isComplete, testState.startTime, completeTest]);
+  }, [testState.isActive, testState.isComplete, testState.startTime, testState.userInput, testState.currentText, calculateStats, completeTest]);
 
   const handleInputChange = (value: string) => {
     if (testState.isComplete) return;
 
-    let startTime = testState.startTime;
-    if (!startTime && value.length > 0) {
-      startTime = Date.now();
-      setTestState(prev => ({ ...prev, isActive: true, startTime }));
-    }
-
-    if (startTime) {
-      const timeElapsed = Date.now() - startTime;
-      const stats = calculateStats(value, testState.currentText, timeElapsed);
-      setTestState(prev => ({ ...prev, userInput: value, ...stats }));
-    }
-
-    if (value.length >= testState.currentText.length) {
-      completeTest();
+    if (!testState.isActive && value.length > 0) {
+      setTestState(prev => ({ ...prev, isActive: true, startTime: Date.now(), userInput: value }));
+    } else if (testState.isActive) {
+      setTestState(prev => ({ ...prev, userInput: value }));
+      if (value.length >= testState.currentText.length) {
+        completeTest();
+      }
     }
   };
 
@@ -182,8 +176,8 @@ export default function TypingTest() {
   const progress = useMemo(() => testState.currentText.length > 0 ? (testState.userInput.length / testState.currentText.length) * 100 : 0, [testState.currentText.length, testState.userInput.length]);
   const getTimerColor = () => testState.timeRemaining < 10 ? 'text-red-400 animate-pulse' : testState.timeRemaining < 60 ? 'text-yellow-400' : 'neon-cyan';
 
-  if (isSnippetLoading) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Loading Challenge...</div>;
-  if (isSnippetError || !currentSnippet) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Error loading snippet. Please try another language.</div>;
+  if (isSnippetLoading) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Loading...</div>;
+  if (!currentSnippet) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">No snippet found.</div>;
 
   return (
     <div className="min-h-screen bg-dark-primary">

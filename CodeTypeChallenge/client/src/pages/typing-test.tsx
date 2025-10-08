@@ -78,21 +78,21 @@ export default function TypingTest() {
       }
     },
   });
-  
+
   const calculateStats = useCallback((input: string, text: string, timeElapsedMs: number) => {
     if (!text) return { wpm: 0, accuracy: 100, errors: 0 };
     const wordsTyped = input.length / 5;
     const wpm = timeElapsedMs > 0 ? (wordsTyped / (timeElapsedMs / 60000)) : 0;
     let errors = 0;
     for (let i = 0; i < input.length; i++) {
-      if (input[i] !== text[i]) {
+      if (i >= text.length || input[i] !== text[i]) {
         errors++;
       }
     }
     const accuracy = input.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
     return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
   }, []);
-
+  
   const completeTest = useCallback(() => {
     setTestState(prev => {
       if (prev.isComplete || !prev.startTime) return prev;
@@ -117,8 +117,9 @@ export default function TypingTest() {
   
   const resetTest = useCallback((newCode?: string) => {
     setShowResults(false);
+    const codeToUse = newCode ?? currentSnippet?.code ?? '';
     setTestState({
-      currentText: newCode ?? currentSnippet?.code ?? '',
+      currentText: codeToUse,
       userInput: '',
       startTime: null,
       isActive: false,
@@ -149,34 +150,22 @@ export default function TypingTest() {
         completeTest();
       }
       
-      setTestState(prev => ({ ...prev, timeRemaining }));
+      const stats = calculateStats(testState.userInput, testState.currentText, secondsElapsed * 1000);
+      setTestState(prev => ({ ...prev, timeRemaining, timeSpent: secondsElapsed, ...stats }));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [testState.isActive, testState.isComplete, testState.startTime, completeTest]);
+  }, [testState.isActive, testState.isComplete, testState.startTime, testState.userInput, testState.currentText, calculateStats, completeTest]);
 
   const handleInputChange = (value: string) => {
     if (testState.isComplete) return;
 
-    let startTime = testState.startTime;
-    let isActive = testState.isActive;
-
-    if (!isActive && value.length > 0) {
-      startTime = Date.now();
-      isActive = true;
+    if (!testState.isActive && value.length > 0) {
+      setTestState(prev => ({ ...prev, isActive: true, startTime: Date.now(), userInput: value }));
+    } else if (testState.isActive) {
+      setTestState(prev => ({ ...prev, userInput: value }));
     }
-    
-    const timeElapsed = startTime ? Date.now() - startTime : 0;
-    const stats = calculateStats(value, testState.currentText, timeElapsed);
-    
-    setTestState(prev => ({
-      ...prev,
-      userInput: value,
-      startTime,
-      isActive,
-      ...stats,
-    }));
-
+  
     if (value.length >= testState.currentText.length) {
       completeTest();
     }

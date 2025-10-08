@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import Navbar from "@/components/ui/navbar";
 import TypingInterface from "@/components/ui/typing-interface";
@@ -11,7 +9,7 @@ import ResultsModal from "@/components/ui/results-modal";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Clock, Zap, Target, AlertCircle } from "lucide-react";
+import { Clock, Zap, Target } from "lucide-react";
 
 interface TestState {
   currentText: string;
@@ -81,6 +79,20 @@ export default function TypingTest() {
     },
   });
   
+  const calculateStats = useCallback((input: string, text: string, timeElapsedMs: number) => {
+    if (!text) return { wpm: 0, accuracy: 100, errors: 0 };
+    const wordsTyped = input.length / 5;
+    const wpm = timeElapsedMs > 0 ? (wordsTyped / (timeElapsedMs / 60000)) : 0;
+    let errors = 0;
+    for (let i = 0; i < input.length; i++) {
+      if (input[i] !== text[i]) {
+        errors++;
+      }
+    }
+    const accuracy = input.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
+    return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
+  }, []);
+
   const completeTest = useCallback(() => {
     setTestState(prev => {
       if (prev.isComplete || !prev.startTime) return prev;
@@ -101,13 +113,12 @@ export default function TypingTest() {
 
       return { ...prev, isActive: false, isComplete: true, ...finalStats };
     });
-  }, [currentSnippet, user, submitResult]);
-
+  }, [calculateStats, currentSnippet, user, submitResult]);
+  
   const resetTest = useCallback((newCode?: string) => {
     setShowResults(false);
-    const codeToUse = newCode ?? currentSnippet?.code ?? '';
     setTestState({
-      currentText: codeToUse,
+      currentText: newCode ?? currentSnippet?.code ?? '',
       userInput: '',
       startTime: null,
       isActive: false,
@@ -127,53 +138,53 @@ export default function TypingTest() {
     }
   }, [snippet, resetTest]);
 
-  const calculateStats = useCallback((input: string, text: string, timeElapsedMs: number) => {
-    const wordsTyped = input.length / 5;
-    const wpm = timeElapsedMs > 0 ? (wordsTyped / (timeElapsedMs / 60000)) : 0;
-    let errors = 0;
-    for (let i = 0; i < input.length; i++) {
-      if (input[i] !== text[i]) {
-        errors++;
-      }
-    }
-    const accuracy = input.length > 0 ? ((input.length - errors) / input.length) * 100 : 100;
-    return { wpm: Math.round(wpm), accuracy: Math.max(0, accuracy), errors };
-  }, []);
-
   useEffect(() => {
     if (!testState.isActive || testState.isComplete) return;
 
     const timer = setInterval(() => {
-      const secondsElapsed = testState.startTime ? Math.round((Date.now() - testState.startTime) / 1000) : 0;
+      const secondsElapsed = Math.floor((Date.now() - (testState.startTime ?? 0)) / 1000);
       const timeRemaining = Math.max(0, TEST_DURATION - secondsElapsed);
       
       if (timeRemaining === 0) {
         completeTest();
       }
       
-      const stats = calculateStats(testState.userInput, testState.currentText, secondsElapsed * 1000);
-      setTestState(prev => ({ ...prev, timeRemaining, timeSpent: secondsElapsed, ...stats }));
+      setTestState(prev => ({ ...prev, timeRemaining }));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [testState.isActive, testState.isComplete, testState.startTime, testState.userInput, testState.currentText, calculateStats, completeTest]);
+  }, [testState.isActive, testState.isComplete, testState.startTime, completeTest]);
 
   const handleInputChange = (value: string) => {
     if (testState.isComplete) return;
 
-    if (!testState.isActive && value.length > 0) {
-      setTestState(prev => ({ ...prev, isActive: true, startTime: Date.now(), userInput: value }));
-    } else if (testState.isActive) {
-      setTestState(prev => ({ ...prev, userInput: value }));
-      if (value.length >= testState.currentText.length) {
-        completeTest();
-      }
+    let startTime = testState.startTime;
+    let isActive = testState.isActive;
+
+    if (!isActive && value.length > 0) {
+      startTime = Date.now();
+      isActive = true;
+    }
+    
+    const timeElapsed = startTime ? Date.now() - startTime : 0;
+    const stats = calculateStats(value, testState.currentText, timeElapsed);
+    
+    setTestState(prev => ({
+      ...prev,
+      userInput: value,
+      startTime,
+      isActive,
+      ...stats,
+    }));
+
+    if (value.length >= testState.currentText.length) {
+      completeTest();
     }
   };
 
   const nextSnippet = () => fetchNewSnippet();
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
-  const progress = useMemo(() => testState.currentText.length > 0 ? (testState.userInput.length / testState.currentText.length) * 100 : 0, [testState.currentText.length, testState.userInput.length]);
+  const progress = useMemo(() => testState.currentText.length > 0 ? (testState.userInput.length / testState.currentText.length) * 100 : 0, [testState.currentText, testState.userInput]);
   const getTimerColor = () => testState.timeRemaining < 10 ? 'text-red-400 animate-pulse' : testState.timeRemaining < 60 ? 'text-yellow-400' : 'neon-cyan';
 
   if (isSnippetLoading) return <div className="min-h-screen bg-dark-primary flex items-center justify-center text-white">Loading...</div>;

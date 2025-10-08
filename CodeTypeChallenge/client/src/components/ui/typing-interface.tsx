@@ -49,7 +49,7 @@ export default function TypingInterface({
 
   const renderCode = () => {
     return code.split('').map((char, index) => {
-      let className = 'text-gray-500'; // Untyped characters
+      let className = 'text-yellow-400'; // Untyped characters
 
       if (index < userInput.length) {
         className = userInput[index] === char ? 'text-green-400' : 'text-red-400 bg-red-500/20';

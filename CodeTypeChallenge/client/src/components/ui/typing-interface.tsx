@@ -72,12 +72,13 @@ export default function TypingInterface({
             value={userInput}
             onChange={(e) => onInputChange(e.target.value)}
             disabled={isComplete}
-            className="w-full min-h-[200px] bg-dark-accent/50 text-white border border-dark-accent rounded-lg p-4 font-mono text-base leading-relaxed resize-none focus:outline-none focus:border-neon-cyan focus:ring-2 focus:ring-neon-cyan/50 disabled:opacity-50"
+            className="w-full min-h-[200px] bg-gray-900 text-gray-100 border-2 border-gray-700 rounded-lg p-4 font-mono text-base leading-relaxed resize-none focus:outline-none focus:border-neon-cyan focus:ring-2 focus:ring-neon-cyan/50 disabled:opacity-50 placeholder-gray-500"
             placeholder={isComplete ? "Test completed!" : "Start typing here..."}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
             autoComplete="off"
+            style={{ caretColor: '#2dd4bf' }}
           />
           
           {/* Stats Bar */}

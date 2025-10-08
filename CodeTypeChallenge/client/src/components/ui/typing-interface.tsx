@@ -100,6 +100,8 @@ export default function TypingInterface({
         const char = line[i];
         
         let syntaxClassName = '';
+        let word = '';
+        let endOfWord = i;
         
         // 1. Determine Syntax Status 
         const remainingLine = line.substring(i);

@@ -125,9 +125,45 @@ export default function TypingTest() {
     return { wpm: Math.round(wpm), accuracy: Math.round(accuracy * 10) / 10, errors };
   }, []);
 
+  // FIX 2: Live timer and stats update
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (testState.isActive && !testState.isComplete) {
+      interval = setInterval(() => {
+        setTestState(prev => {
+          if (!prev.startTime) return prev;
+          
+          const timeElapsed = Date.now() - prev.startTime;
+          const secondsElapsed = Math.round(timeElapsed / 1000);
+          
+          if (secondsElapsed > prev.timeSpent) {
+            const stats = calculateStats(prev.userInput, prev.currentText, timeElapsed);
+            return {
+              ...prev,
+              timeSpent: secondsElapsed,
+              ...stats,
+            };
+          }
+          return prev;
+        });
+      }, 1000);
+    } else if (interval) {
+      clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [testState.isActive, testState.isComplete, calculateStats]);
+
+
   // Handle input change
   const handleInputChange = (value: string) => {
     const now = Date.now();
+    const text = testState.currentText;
+
+    // Restrict typing if already complete
+    if (testState.isComplete) return;
     
     // Start test on first character
     if (!testState.startTime && value.length === 1) {
@@ -135,19 +171,33 @@ export default function TypingTest() {
         ...prev,
         startTime: now,
         isActive: true,
+        userInput: value, // Ensure input is updated immediately
       }));
+      return;
+    }
+    
+    // Allow input update even if not fully 'active' (e.g., initial state)
+    if (!testState.isActive && value.length <= 0) {
+        setTestState(prev => ({ ...prev, userInput: value }));
+        return;
+    }
+    
+    // Fallback to update input if test is active or has started
+    if (!testState.isActive && testState.startTime) {
+        setTestState(prev => ({ ...prev, userInput: value }));
+        return;
     }
     
     // Check if test is complete
-    const isComplete = value.length >= testState.currentText.length;
+    const isComplete = value.length >= text.length;
     const timeElapsed = testState.startTime ? now - testState.startTime : 0;
-    const stats = calculateStats(value, testState.currentText, timeElapsed);
+    const stats = calculateStats(value, text, timeElapsed);
     
     setTestState(prev => ({
       ...prev,
       userInput: value,
       isComplete,
-      timeSpent: Math.round(timeElapsed / 1000),
+      timeSpent: testState.startTime ? Math.round((now - testState.startTime) / 1000) : 0,
       ...stats,
     }));
     
@@ -180,6 +230,7 @@ export default function TypingTest() {
 
   // Reset test
   const resetTest = () => {
+    setShowResults(false);
     setTestState(prev => ({
       ...prev,
       userInput: '',
@@ -211,7 +262,7 @@ export default function TypingTest() {
     ? (testState.userInput.length / testState.currentText.length) * 100 
     : 0;
 
-  if (!currentSnippet && !snippet) {
+  if (!params.languageId || (!currentSnippet && !snippet)) {
     return (
       <div className="min-h-screen bg-dark-primary">
         <Navbar />
@@ -225,8 +276,8 @@ export default function TypingTest() {
                   ? "No code snippets found for this language" 
                   : "Please select a language to start typing"}
               </p>
-              <Button onClick={() => window.history.back()}>
-                Go Back
+              <Button onClick={() => window.location.href = "/"}>
+                Go to Dashboard
               </Button>
             </CardContent>
           </Card>

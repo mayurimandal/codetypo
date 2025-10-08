@@ -129,8 +129,7 @@ export default function TypingInterface({
         
         // Keyword, Function, Number Detection (only if not in comment or string)
         else if (isWordChar(char)) {
-            let word = '';
-            let endOfWord = i;
+
             
             // Extract the full word from the current position
             while (endOfWord < line.length && isWordChar(line[endOfWord])) {

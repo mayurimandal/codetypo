@@ -40,13 +40,14 @@ export default function TypingInterface({
   onNext,
 }: TypingInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const codeDisplayRef = useRef<HTMLDivElement>(null);
   const [showCursor, setShowCursor] = useState(true);
 
   // Cursor blinking effect
   useEffect(() => {
     const interval = setInterval(() => {
       setShowCursor(prev => !prev);
-    }, 1000);
+    }, 500); // Changed to 500ms for a more natural blink speed
     return () => clearInterval(interval);
   }, []);
 
@@ -56,6 +57,34 @@ export default function TypingInterface({
       textareaRef.current.focus();
     }
   }, [isComplete, code]);
+
+  // Determine current line index for scrolling
+  const currentLineIndex = userInput.split('\n').length - 1;
+
+  // FIX 3: Auto-scroll logic for code display to keep current line visible
+  useEffect(() => {
+    if (codeDisplayRef.current) {
+      const lines = codeDisplayRef.current.children;
+      if (currentLineIndex >= 0 && currentLineIndex < lines.length) {
+        const targetLine = lines[currentLineIndex] as HTMLElement;
+        const container = codeDisplayRef.current;
+        
+        // Use container/3 as a scroll offset to keep the current line visible but not right at the edge
+        const containerHeight = container.offsetHeight;
+        const lineOffset = containerHeight / 3; 
+
+        // Scroll down if current line is near or below the bottom third
+        if (targetLine.offsetTop > container.scrollTop + containerHeight - lineOffset) {
+             container.scrollTop = targetLine.offsetTop - containerHeight + lineOffset;
+        } 
+        // Scroll up if current line is near or above the top third
+        else if (targetLine.offsetTop < container.scrollTop + lineOffset) {
+             container.scrollTop = targetLine.offsetTop - lineOffset;
+        }
+      }
+    }
+  }, [userInput, currentLineIndex]);
+
 
   // Render code with syntax highlighting
   const renderCodeWithHighlight = () => {
@@ -132,7 +161,7 @@ export default function TypingInterface({
           // Typed characters: Green/Red takes absolute priority
           const userChar = userInput[globalIndex];
           finalClassName = userChar === char ? 'text-green-400 bg-green-400/20' : 'text-red-400 bg-red-400/20';
-        } else if (globalIndex === userInput.length && isActive) {
+        } else if (globalIndex === userInput.length && isActive && !isComplete) {
           // Cursor position
           finalClassName = cn(`bg-neon-cyan/50 ${showCursor ? 'text-white' : 'text-gray-300'}`);
         } else {
@@ -141,7 +170,27 @@ export default function TypingInterface({
         }
         
         renderedLine += `<span class="${finalClassName}">${char === ' ' ? '&nbsp;' : char}</span>`;
-        globalIndex++;
+        
+        // If a word token was matched, advance the index
+        if (syntaxClassName && (syntaxClassName === 'syntax-keyword' || syntaxClassName === 'syntax-number' || syntaxClassName === 'syntax-function')) {
+            const wordLength = word.length;
+            if (wordLength > 1 && i === endOfWord - wordLength) {
+                // Adjust index pointers to account for the full word token.
+                // We advance 'i' by 'wordLength - 1' because 'i' will increment by 1
+                // at the end of the for loop. We advance 'globalIndex' by the full length
+                // minus the 1 count it just got.
+                i += wordLength - 1;
+                globalIndex += wordLength - 1;
+                
+                // Reset for the next character outside the token
+                syntaxClassName = '';
+                word = '';
+            } else {
+                globalIndex++;
+            }
+        } else {
+            globalIndex++;
+        }
       }
       
       return (
@@ -167,7 +216,8 @@ export default function TypingInterface({
             </Button>
           </div>
           
-          <div className="font-mono text-lg">
+          {/* FIX 3: Added ref, max-h and overflow for scrolling */}
+          <div ref={codeDisplayRef} className="font-mono text-lg max-h-64 overflow-y-auto">
             {renderCodeWithHighlight()}
           </div>
         </CardContent>
@@ -185,7 +235,8 @@ export default function TypingInterface({
               ref={textareaRef}
               value={userInput}
               onChange={(e) => onInputChange(e.target.value)}
-              className="w-full h-40 bg-dark-primary border border-dark-accent rounded-lg p-4 font-mono text-lg focus:outline-none focus:border-neon-cyan resize-none"
+              // FIX 3: Reduced height from h-40 to h-20 for more screen space
+              className="w-full h-20 bg-dark-primary border border-dark-accent rounded-lg p-4 font-mono text-lg focus:outline-none focus:border-neon-cyan resize-none"
               placeholder={isComplete ? "Test completed!" : "Start typing the code above..."}
               disabled={isComplete}
               spellCheck={false}

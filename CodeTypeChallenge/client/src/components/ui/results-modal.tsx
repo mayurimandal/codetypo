@@ -87,8 +87,9 @@ export default function ResultsModal({
         
         <div className="flex space-x-3">
           <Button
+            variant="secondary"
             onClick={onTryAgain}
-            className="flex-1 bg-neon-cyan text-dark-primary hover:bg-neon-cyan/80 font-semibold"
+            className="flex-1 bg-neon-cyan text-black hover:bg-neon-cyan/80 font-semibold"
           >
             Try Again
           </Button>

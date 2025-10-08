@@ -100,9 +100,9 @@ export default function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => window.location.href = "/api/login"}>
-                Sign In
-              </Button>
+              <Link href="/login">
+                <Button>Sign In</Button>
+              </Link>
             )}
           </div>
         </div>
